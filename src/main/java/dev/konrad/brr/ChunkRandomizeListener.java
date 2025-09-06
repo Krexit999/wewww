@@ -27,45 +27,47 @@ public final class ChunkRandomizeListener implements Listener {
             .collect(Collectors.toSet());
     }
 
-    @EventHandler
-    public void onChunkLoad(ChunkLoadEvent event) {
-        if (!event.isNewChunk()) return;
-        World world = event.getWorld();
-        if (!plugin.isWorldAllowed(world.getName())) return;
+@EventHandler
+public void onChunkLoad(ChunkLoadEvent event) {
+    if (!event.isNewChunk()) return;
+    World world = event.getWorld();
+    if (!plugin.isWorldAllowed(world.getName())) return;
 
-        Chunk chunk = event.getChunk();
-        Map<Material, Material> map = plugin.getMapping();
+    Chunk chunk = event.getChunk();
+    Map<Material, Material> map = plugin.getMapping();
 
-        new BukkitRunnable() {
-            @Override public void run() {
-                if (!chunk.isLoaded()) { cancel(); return; }
-                int cx = chunk.getX() << 4;
-                int cz = chunk.getZ() << 4;
+    // Schedule task once per minute (1200 ticks)
+    new BukkitRunnable() {
+        @Override public void run() {
+            if (!chunk.isLoaded()) { cancel(); return; }
 
-                for (int x = 0; x < 16; x++) {
-                    for (int z = 0; z < 16; z++) {
-                        int worldX = cx + x;
-                        int worldZ = cz + z;
-                        Block top = world.getHighestBlockAt(worldX, worldZ);
+            int cx = chunk.getX() << 4;
+            int cz = chunk.getZ() << 4;
 
-                        for (int depth = 0; depth < 5; depth++) {
-                            Block b = top.getRelative(0, -depth, 0);
-                            if (b.getY() < world.getMinHeight()) break;
+            for (int x = 0; x < 16; x++) {
+                for (int z = 0; z < 16; z++) {
+                    int worldX = cx + x;
+                    int worldZ = cz + z;
+                    Block top = world.getHighestBlockAt(worldX, worldZ);
 
-                            Material src = b.getType();
-                            if (!src.isBlock()) continue;
-                            if (!plugin.getConfig().getBoolean("includeAir", false) && src.isAir()) continue;
-                            if (excluded.contains(src)) continue;
-                            if (!src.isSolid()) continue; // ✅ only solid blocks
+                    for (int depth = 0; depth < 5; depth++) {
+                        Block b = top.getRelative(0, -depth, 0);
+                        if (b.getY() < world.getMinHeight()) break;
 
-                            Material dst = map.get(src);
-                            if (dst != null && dst != src && dst.isSolid()) {
-                                b.setType(dst, false);
-                            }
+                        Material src = b.getType();
+                        if (!src.isBlock()) continue;
+                        if (!plugin.getConfig().getBoolean("includeAir", false) && src.isAir()) continue;
+                        if (excluded.contains(src)) continue;
+                        if (!src.isSolid()) continue;
+
+                        Material dst = map.get(src);
+                        if (dst != null && dst != src && dst.isSolid()) {
+                            b.setType(dst, false);
                         }
                     }
                 }
             }
-        }.runTaskTimer(plugin, 1L, 1L);
-    }
+        }
+    }.runTaskTimer(plugin, 0L, 1200L); // every 60s
 }
+
