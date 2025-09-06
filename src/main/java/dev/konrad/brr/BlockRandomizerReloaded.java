@@ -85,11 +85,11 @@ public final class BlockRandomizerReloaded extends JavaPlugin {
             Material.REPEATER, Material.COMPARATOR, Material.TARGET, Material.DAYLIGHT_DETECTOR,
             // fences
             Material.OAK_FENCE, Material.SPRUCE_FENCE, Material.BIRCH_FENCE, Material.JUNGLE_FENCE,
-            Material.ACACIA_FENCE, Material.DARK_OAK_FENCE, Material.MANGROVE_FENCE, Material.BAMBOO_FENCE,
+            Material.ACACIA_FENCE, Material.DARK_OAK_FENCE, Material.MANGROVE_FENCE,
             Material.CRIMSON_FENCE, Material.WARPED_FENCE,
             // fence gates
             Material.OAK_FENCE_GATE, Material.SPRUCE_FENCE_GATE, Material.BIRCH_FENCE_GATE, Material.JUNGLE_FENCE_GATE,
-            Material.ACACIA_FENCE_GATE, Material.DARK_OAK_FENCE_GATE, Material.MANGROVE_FENCE_GATE, Material.BAMBOO_FENCE_GATE,
+            Material.ACACIA_FENCE_GATE, Material.DARK_OAK_FENCE_GATE, Material.MANGROVE_FENCE_GATE,
             Material.CRIMSON_FENCE_GATE, Material.WARPED_FENCE_GATE,
             // beds
             Material.WHITE_BED, Material.ORANGE_BED, Material.MAGENTA_BED, Material.LIGHT_BLUE_BED,
