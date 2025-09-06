@@ -1,180 +1,265 @@
-// BlockRandomizerReloaded.java
 package dev.konrad.brr;
 
 import org.bukkit.Material;
+import org.bukkit.World;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.plugin.java.JavaPlugin;
+import org.bukkit.event.Listener;
 
-import java.io.File;
-import java.io.FileWriter;
-import java.io.IOException;
-import java.security.SecureRandom;
 import java.util.*;
-import java.util.stream.Collectors;
+import java.util.logging.Logger;
 
-public final class BlockRandomizerReloaded extends JavaPlugin {
-    private final Map<Material, Material> mapping = new EnumMap<>(Material.class);
-    private final Set<Material> excluded = EnumSet.noneOf(Material.class);
+/**
+ * Main plugin class for Block Randomizer Reloaded (1.19.2-safe).
+ * Builds a blacklist of "donor" materials we never touch and a pool of
+ * safe full-block materials we may place as replacements.
+ */
+public final class BlockRandomizerReloaded extends JavaPlugin implements Listener {
 
-    private boolean includeAir;
-    private Set<String> worldFilter;
-    private long seed;
-    private Random rng;
+    // Pools built from config + hard rules
+    private volatile List<Material> replacementPool = null;  // what we can PLACE
+    private volatile Set<Material> donorBlacklist = null;    // what we REFUSE TO REPLACE
+    private volatile Set<String> enabledWorlds = Collections.emptySet();
 
-    // Parameters
-    private int maxBlocksPerTick;
-    private int maxBlocksPerChunkCap;
-    private int minY;
-    private int maxY;
-    private boolean considerLiquidsAsSurface;
-    private boolean oneToOne;
+    private final Random rng = new Random();
 
     @Override
     public void onEnable() {
-        saveDefaultConfig();
-        loadAndBuild();
-        if (getCommand("brr") != null) {
-            getCommand("brr").setExecutor((sender, cmd, label, args) -> {
-                if (!sender.hasPermission("brr.admin")) {
-                    sender.sendMessage("§cNo permission.");
-                    return true;
-                }
-                if (args.length == 0) {
-                    sender.sendMessage("§eUsage: /brr <reload|dump>");
-                    return true;
-                }
-                switch (args[0].toLowerCase(Locale.ROOT)) {
-                    case "reload" -> {
-                        reloadConfig();
-                        loadAndBuild();
-                        sender.sendMessage("§aBlockRandomizerSurface: config & mapping reloaded.");
-                    }
-                    case "dump" -> {
-                        File out = new File(getDataFolder(), "mapping-dump.txt");
-                        try (FileWriter fw = new FileWriter(out, false)) {
-                            fw.write("# seed=" + seed + "\n");
-                            for (Map.Entry<Material, Material> e : mapping.entrySet()) {
-                                fw.write(e.getKey().name() + " -> " + e.getValue().name() + "\n");
-                            }
-                            sender.sendMessage("§aDumped mapping to " + out.getAbsolutePath());
-                        } catch (IOException ex) {
-                            sender.sendMessage("§cFailed to write mapping: " + ex.getMessage());
-                        }
-                    }
-                    default -> sender.sendMessage("§eUsage: /brr <reload|dump>");
-                }
-                return true;
-            });
-        }
+        saveDefaultConfig();       // creates config.yml if absent
+        rebuildFromConfig();       // build pools and read settings
+
+        // Register your listeners. Adjust class name/package if different.
         getServer().getPluginManager().registerEvents(new ChunkRandomizeListener(this), this);
+
+        getLogger().info("[BRR] Enabled. Replacement pool size=" + replacementPool.size()
+                + ", donor blacklist size=" + donorBlacklist.size());
     }
 
-    void loadAndBuild() {
+    @Override
+    public void onDisable() {
+        // nothing specific
+    }
+
+    /**
+     * Public helper if you add a /brrreload command (optional).
+     */
+    public void reloadPools() {
+        reloadConfig();
+        rebuildFromConfig();
+    }
+
+    // =========================================================
+    // === Methods the listener expects ========================
+    // =========================================================
+
+    public boolean isWorldEnabled(World world) {
+        ensurePoolsBuilt();
+        if (world == null) return false;
+        if (enabledWorlds == null || enabledWorlds.isEmpty()) return true; // empty => all enabled
+        return enabledWorlds.contains(world.getName());
+    }
+
+    /**
+     * Whether the EXISTING block type is allowed to be replaced.
+     * We refuse if it is air, liquid, gravity/unstable, thin/partial,
+     * redstone/interactive/tile-entity-like, etc.
+     */
+    public boolean isAllowedReplacement(Material material) {
+        ensurePoolsBuilt();
+        return material != null
+                && material.isBlock()
+                && !material.isAir()
+                && !donorBlacklist.contains(material);
+    }
+
+    /**
+     * Pick a RANDOM material from the safe replacement pool.
+     * Listener can pass its own RNG or use this.rng.
+     */
+    public Material pickRandomMaterial(Random rng) {
+        ensurePoolsBuilt();
+        if (replacementPool.isEmpty()) return Material.STONE;
+        Random r = (rng != null ? rng : this.rng);
+        return replacementPool.get(r.nextInt(replacementPool.size()));
+    }
+
+    // Convenience overload if your code ever needs it
+    public Material pickRandomMaterial() {
+        return pickRandomMaterial(this.rng);
+    }
+
+    // =========================================================
+    // === Pool building / config ==============================
+    // =========================================================
+
+    private void rebuildFromConfig() {
+        saveDefaultConfig();
         FileConfiguration cfg = getConfig();
-        this.includeAir = cfg.getBoolean("includeAir", false);
-        this.oneToOne = cfg.getBoolean("oneToOneMapping", false);
-        this.worldFilter = new HashSet<>(cfg.getStringList("worlds"));
-        this.maxBlocksPerTick = Math.max(1, cfg.getInt("maxBlocksPerTick", 400));
-        this.maxBlocksPerChunkCap = Math.max(0, cfg.getInt("maxBlocksPerChunkCap", 0));
-        this.minY = cfg.getInt("minY", 60);
-        this.maxY = cfg.getInt("maxY", 320);
-        this.considerLiquidsAsSurface = cfg.getBoolean("considerLiquidsAsSurface", true);
+        Logger log = getLogger();
 
-        // clamp min/max
-        int worldMin = getServer().getWorlds().isEmpty() ? -64 : getServer().getWorlds().get(0).getMinHeight();
-        int worldMax = getServer().getWorlds().isEmpty() ? 319 : getServer().getWorlds().get(0).getMaxHeight();
-        if (this.minY < worldMin) this.minY = worldMin;
-        if (this.maxY > worldMax) this.maxY = worldMax;
+        // Worlds: empty list means "all worlds"
+        enabledWorlds = new HashSet<>(cfg.getStringList("enabledWorlds"));
 
-        // build exclusions (config + hardcoded categories)
-        this.excluded.clear();
-        for (String name : cfg.getStringList("excludeMaterials")) {
-            try { this.excluded.add(Material.valueOf(name)); } catch (IllegalArgumentException ignored) {}
-        }
-        // Category-based hard excludes (1.19.2-safe)
-        for (Material m : Material.values()) {
-            String n = m.name();
-            if (n.endsWith("_SLAB") || n.endsWith("_STAIRS") || n.endsWith("_WALL") ||
-                n.endsWith("_PANE") || n.endsWith("_CARPET") || n.endsWith("_BANNER") ||
-                n.endsWith("_BED") || n.endsWith("_DOOR") || n.endsWith("_TRAPDOOR") ||
-                n.endsWith("_SIGN") || n.endsWith("_PRESSURE_PLATE") ||
-                n.endsWith("_FENCE") || n.endsWith("_FENCE_GATE") ||
-                n.endsWith("_BUTTON") || n.equals("LEVER") || n.contains("RAIL") ||
-                n.equals("LADDER") || n.equals("VINE") || n.endsWith("_TORCH") ||
-                n.endsWith("LANTERN") || n.equals("END_ROD") || n.equals("LIGHTNING_ROD") ||
-                n.equals("IRON_BARS") || n.equals("CHAIN") ||
-                n.endsWith("SHULKER_BOX") || !m.isSolid()) {
-                excluded.add(m);
+        // ---------------------------
+        // Build donor blacklist (things we will NOT replace in the world)
+        // ---------------------------
+        EnumSet<Material> hard = EnumSet.noneOf(Material.class);
+
+        // Air & liquids
+        addIfPresent(hard, "AIR", "CAVE_AIR", "VOID_AIR", "WATER", "LAVA");
+
+        // Gravity / unstable
+        addIfPresent(hard, "SAND", "RED_SAND", "GRAVEL", "DRAGON_EGG");
+        addConcretePowders(hard); // all 16 *_CONCRETE_POWDER
+
+        // Thin/partial / interactives / updatables you banned (by suffix)
+        addBySuffix(hard,
+                "_SLAB", "_STAIRS", "_WALL", "_PANE",
+                "_FENCE", "_FENCE_GATE",
+                "_DOOR", "_TRAPDOOR",
+                "_SIGN", "_WALL_SIGN",
+                "_BANNER", "_BED",
+                "_CARPET", "_BUTTON",
+                "_PRESSURE_PLATE", "_RAIL"
+        );
+
+        // Specific interactives / TE-like blocks / redstone / misc
+        addIfPresent(hard,
+                // redstone bits
+                "REDSTONE_BLOCK", "REDSTONE_TORCH", "REDSTONE_WALL_TORCH", "REPEATER", "COMPARATOR", "OBSERVER", "DAYLIGHT_DETECTOR",
+                // power / physics
+                "LIGHTNING_ROD", "END_ROD", "BELL", "TARGET",
+                // containers & machines
+                "CHEST", "TRAPPED_CHEST", "BARREL", "HOPPER",
+                "DROPPER", "DISPENSER",
+                "FURNACE", "SMOKER", "BLAST_FURNACE",
+                // utility/tile entities
+                "BREWING_STAND", "ENCHANTING_TABLE", "LECTERN", "CARTOGRAPHY_TABLE", "SMITHING_TABLE", "GRINDSTONE", "LOOM",
+                "STONECUTTER", "COMPOSTER",
+                // sculk + conduit + bell already
+                "CONDUIT", "SCULK_SENSOR", "SCULK_SHRIEKER", "SCULK_CATALYST",
+                // portal/frame-ish safety exclusions
+                "END_PORTAL", "NETHER_PORTAL",
+                // portals/frames you said fine: END_PORTAL_FRAME is allowed (do NOT add it here)
+                // liquids/cauldrons
+                "CAULDRON", "WATER_CAULDRON", "LAVA_CAULDRON", "POWDER_SNOW_CAULDRON",
+                // hazards / special
+                "TNT", "TRIPWIRE", "TRIPWIRE_HOOK", "LEVER",
+                "SLIME_BLOCK", "HONEY_BLOCK",
+                // heads
+                "PLAYER_HEAD", "ZOMBIE_HEAD", "CREEPER_HEAD", "DRAGON_HEAD",
+                "SKELETON_SKULL", "WITHER_SKELETON_SKULL",
+                // snow layers & powder
+                "SNOW", "POWDER_SNOW",
+                // farmland / crops soil
+                "FARMLAND",
+                // campfires
+                "CAMPFIRE", "SOUL_CAMPFIRE",
+                // structure/command (just in case)
+                "STRUCTURE_BLOCK", "JIGSAW", "COMMAND_BLOCK", "REPEATING_COMMAND_BLOCK", "CHAIN_COMMAND_BLOCK",
+                // lodestone
+                "LODESTONE",
+                // bars/panes (suffix already covers many)
+                "IRON_BARS"
+        );
+
+        // Optional extra safety: leave bedrock alone
+        addIfPresent(hard, "BEDROCK");
+
+        // Merge configurable exclusions
+        List<String> cfgExStrings = cfg.getStringList("excludeMaterials");
+        if (cfgExStrings != null) {
+            for (String s : cfgExStrings) {
+                if (s == null) continue;
+                try {
+                    Material m = Material.valueOf(s.trim().toUpperCase(Locale.ROOT));
+                    hard.add(m);
+                } catch (IllegalArgumentException ex) {
+                    log.warning("[BRR] Unknown excludeMaterials entry ignored: " + s);
+                }
             }
         }
-        // Containers / tile entities / mechanics
-        excluded.addAll(EnumSet.of(
-            Material.FARMLAND,
-            Material.CAULDRON, Material.WATER_CAULDRON, Material.LAVA_CAULDRON, Material.POWDER_SNOW_CAULDRON,
-            Material.CAMPFIRE, Material.SOUL_CAMPFIRE,
-            Material.COMPOSTER, Material.LECTERN,
-            Material.ANVIL, Material.CHIPPED_ANVIL, Material.DAMAGED_ANVIL,
-            Material.BREWING_STAND, Material.BEACON, Material.CONDUIT, Material.JUKEBOX,
-            Material.SCULK_SENSOR, Material.SCULK_SHRIEKER,
-            Material.CHEST, Material.TRAPPED_CHEST, Material.BARREL, Material.ENDER_CHEST,
-            Material.FURNACE, Material.BLAST_FURNACE, Material.SMOKER,
-            Material.HOPPER, Material.DISPENSER, Material.DROPPER,
-            Material.SPAWNER
-        ));
-        // Redstone & pistons
-        excluded.addAll(EnumSet.of(
-            Material.REDSTONE_BLOCK, Material.REDSTONE_ORE, Material.DEEPSLATE_REDSTONE_ORE,
-            Material.REDSTONE_LAMP, Material.REPEATER, Material.COMPARATOR,
-            Material.OBSERVER, Material.TARGET, Material.DAYLIGHT_DETECTOR,
-            Material.PISTON, Material.STICKY_PISTON, Material.TNT
-        ));
-        // Heads / skulls
-        excluded.addAll(EnumSet.of(
-            Material.PLAYER_HEAD, Material.ZOMBIE_HEAD, Material.CREEPER_HEAD, Material.DRAGON_HEAD,
-            Material.SKELETON_SKULL, Material.WITHER_SKELETON_SKULL
-        ));
-        // Falling blocks & oddballs
-        excluded.addAll(EnumSet.of(
-            Material.SAND, Material.RED_SAND, Material.GRAVEL, Material.DRAGON_EGG
-        ));
+        donorBlacklist = Collections.unmodifiableSet(hard);
+
+        // ---------------------------
+        // Build replacement pool (safe full blocks to place)
+        // ---------------------------
+        ArrayList<Material> pool = new ArrayList<>();
         for (Material m : Material.values()) {
-            if (m.name().endsWith("_CONCRETE_POWDER")) excluded.add(m);
+            if (!m.isBlock()) continue;
+            if (m.isAir()) continue;
+            if (donorBlacklist.contains(m)) continue;
+
+            // Basic solidity (keeps glass out too, unless explicitly re-added below)
+            if (!m.isSolid()) continue;
+
+            // Extra gravity/liquid guard
+            if (m == Material.WATER || m == Material.LAVA
+                    || m == Material.SAND || m == Material.RED_SAND || m == Material.GRAVEL
+                    || isConcretePowder(m)) continue;
+
+            pool.add(m);
         }
 
-        long cfgSeed = cfg.getLong("seed", -1);
-        this.seed = (cfgSeed == -1) ? new SecureRandom().nextLong() : cfgSeed;
-        this.rng = new Random(seed);
+        // If you DO want some full, transparent light blocks, explicitly add them:
+        addIfPresent(pool, "GLOWSTONE", "SEA_LANTERN", "SHROOMLIGHT");
+        // If you want GLASS/TINTED_GLASS included, uncomment the next line:
+        // addIfPresent(pool, "GLASS", "TINTED_GLASS");
 
-        buildMapping();
+        if (pool.isEmpty()) {
+            pool.add(Material.STONE);
+            log.warning("[BRR] Replacement pool ended empty; defaulting to STONE only.");
+        }
+        replacementPool = Collections.unmodifiableList(pool);
+
+        log.info("[BRR] Built pools. replacementPool=" + replacementPool.size()
+                + ", donorBlacklist=" + donorBlacklist.size()
+                + ", enabledWorlds=" + (enabledWorlds == null ? 0 : enabledWorlds.size()));
     }
 
-    private void buildMapping() {
-        mapping.clear();
-        Set<Material> allAllowed = Arrays.stream(Material.values())
-                .filter(Material::isBlock)
-                .filter(Material::isSolid)
-                .filter(m -> includeAir || !m.isAir())
-                .filter(m -> !excluded.contains(m))
-                .collect(Collectors.toCollection(() -> EnumSet.noneOf(Material.class)));
-        if (allAllowed.isEmpty()) {
-            getLogger().warning("No allowed materials to map! Check exclusions.");
-            return;
+    private void ensurePoolsBuilt() {
+        if (replacementPool == null || donorBlacklist == null) {
+            rebuildFromConfig();
         }
-        List<Material> pool = new ArrayList<>(allAllowed);
-        if (oneToOne) Collections.shuffle(pool, rng);
-        for (Material src : allAllowed) {
-            Material dst = oneToOne ? pool.get(rng.nextInt(pool.size())) : pool.get(rng.nextInt(pool.size()));
-            mapping.put(src, dst);
-        }
-        getLogger().info("Allowed pool size: " + pool.size());
     }
 
-    public Map<Material, Material> getMapping() { return mapping; }
-    public boolean isWorldAllowed(String worldName) { return worldFilter.isEmpty() || worldFilter.contains(worldName); }
-    public Set<Material> getExcluded() { return excluded; }
-    public int getMaxBlocksPerTick() { return maxBlocksPerTick; }
-    public int getMaxBlocksPerChunkCap() { return maxBlocksPerChunkCap; }
-    public int getMinY() { return minY; }
-    public int getMaxY() { return maxY; }
-    public boolean isConsiderLiquidsAsSurface() { return considerLiquidsAsSurface; }
+    // =========================================================
+    // === Small helpers =======================================
+    // =========================================================
+
+    private static void addIfPresent(Collection<Material> target, String... names) {
+        for (String n : names) {
+            try {
+                target.add(Material.valueOf(n));
+            } catch (IllegalArgumentException ignored) {
+                // ignore materials that don't exist in 1.19.2
+            }
+        }
+    }
+
+    private static void addConcretePowders(Collection<Material> target) {
+        addIfPresent(target,
+                "WHITE_CONCRETE_POWDER","ORANGE_CONCRETE_POWDER","MAGENTA_CONCRETE_POWDER","LIGHT_BLUE_CONCRETE_POWDER",
+                "YELLOW_CONCRETE_POWDER","LIME_CONCRETE_POWDER","PINK_CONCRETE_POWDER","GRAY_CONCRETE_POWDER",
+                "LIGHT_GRAY_CONCRETE_POWDER","CYAN_CONCRETE_POWDER","PURPLE_CONCRETE_POWDER","BLUE_CONCRETE_POWDER",
+                "BROWN_CONCRETE_POWDER","GREEN_CONCRETE_POWDER","RED_CONCRETE_POWDER","BLACK_CONCRETE_POWDER"
+        );
+    }
+
+    private static boolean isConcretePowder(Material m) {
+        return m != null && m.name().endsWith("_CONCRETE_POWDER");
+    }
+
+    private static void addBySuffix(Collection<Material> target, String... suffixes) {
+        if (suffixes == null || suffixes.length == 0) return;
+        for (Material m : Material.values()) {
+            String name = m.name();
+            for (String suf : suffixes) {
+                if (name.endsWith(suf)) {
+                    target.add(m);
+                    break;
+                }
+            }
+        }
+    }
 }
