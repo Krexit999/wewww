@@ -1,0 +1,23 @@
+seed: -1
+includeAir: false
+preserveCategories: true
+oneToOneMapping: false
+yStepPerTick: 16
+worlds: [ ]
+excludeMaterials:
+  - AIR
+  - CAVE_AIR
+  - VOID_AIR
+  - BEDROCK
+  - END_PORTAL
+  - NETHER_PORTAL
+  - END_GATEWAY
+  - STRUCTURE_BLOCK
+  - JIGSAW
+  - BARRIER
+  - COMMAND_BLOCK
+  - REPEATING_COMMAND_BLOCK
+  - CHAIN_COMMAND_BLOCK
+  - LIGHT
+  - WATER
+  - LAVA
