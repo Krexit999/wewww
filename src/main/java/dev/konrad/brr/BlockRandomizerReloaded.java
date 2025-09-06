@@ -71,10 +71,32 @@ public final class BlockRandomizerReloaded extends JavaPlugin {
         this.yStepPerTick = Math.max(1, cfg.getInt("yStepPerTick", 16));
         this.worldFilter = new HashSet<>(cfg.getStringList("worlds"));
 
-        this.excluded.clear();
-        for (String name : cfg.getStringList("excludeMaterials")) {
-            try { this.excluded.add(Material.valueOf(name)); } catch (IllegalArgumentException ignored) {}
-        }
+this.excluded.clear();
+for (String name : cfg.getStringList("excludeMaterials")) {
+    try { this.excluded.add(Material.valueOf(name)); } catch (IllegalArgumentException ignored) {}
+}
+
+// Add more exclusions (hardcoded)
+excluded.addAll(EnumSet.of(
+    Material.PLAYER_HEAD, Material.ZOMBIE_HEAD, Material.CREEPER_HEAD,
+    Material.DRAGON_HEAD, Material.SKELETON_SKULL, Material.WITHER_SKELETON_SKULL,
+    Material.LIGHTNING_ROD, Material.IRON_BARS,
+    Material.OAK_FENCE, Material.SPRUCE_FENCE, Material.BIRCH_FENCE, Material.JUNGLE_FENCE,
+    Material.ACACIA_FENCE, Material.DARK_OAK_FENCE, Material.MANGROVE_FENCE, Material.BAMBOO_FENCE,
+    Material.CRIMSON_FENCE, Material.WARPED_FENCE,
+    Material.OAK_FENCE_GATE, Material.SPRUCE_FENCE_GATE, Material.BIRCH_FENCE_GATE, Material.JUNGLE_FENCE_GATE,
+    Material.ACACIA_FENCE_GATE, Material.DARK_OAK_FENCE_GATE, Material.MANGROVE_FENCE_GATE, Material.BAMBOO_FENCE_GATE,
+    Material.CRIMSON_FENCE_GATE, Material.WARPED_FENCE_GATE,
+    Material.WHITE_BED, Material.ORANGE_BED, Material.MAGENTA_BED, Material.LIGHT_BLUE_BED,
+    Material.YELLOW_BED, Material.LIME_BED, Material.PINK_BED, Material.GRAY_BED,
+    Material.LIGHT_GRAY_BED, Material.CYAN_BED, Material.PURPLE_BED, Material.BLUE_BED,
+    Material.BROWN_BED, Material.GREEN_BED, Material.RED_BED, Material.BLACK_BED,
+    Material.WHITE_BANNER, Material.ORANGE_BANNER, Material.MAGENTA_BANNER, Material.LIGHT_BLUE_BANNER,
+    Material.YELLOW_BANNER, Material.LIME_BANNER, Material.PINK_BANNER, Material.GRAY_BANNER,
+    Material.LIGHT_GRAY_BANNER, Material.CYAN_BANNER, Material.PURPLE_BANNER, Material.BLUE_BANNER,
+    Material.BROWN_BANNER, Material.GREEN_BANNER, Material.RED_BANNER, Material.BLACK_BANNER
+));
+
 
         long cfgSeed = cfg.getLong("seed", -1);
         this.seed = (cfgSeed == -1) ? new SecureRandom().nextLong() : cfgSeed;
