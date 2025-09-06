@@ -1,0 +1,13 @@
+name: BlockRandomizerSurface
+main: dev.konrad.brr.BlockRandomizerReloaded
+version: 2.4.0
+api-version: '1.19'
+author: Konrad
+commands:
+  brr:
+    description: Block Randomizer Surface admin commands
+    usage: /brr <reload|dump>
+    permission: brr.admin
+permissions:
+  brr.admin:
+    default: op

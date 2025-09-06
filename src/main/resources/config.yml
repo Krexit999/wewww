@@ -1,0 +1,54 @@
+# --- Behavior ---
+seed: -1                  # -1 = random each boot, else fixed seed
+includeAir: false         # keep false (we never map air anyway)
+oneToOneMapping: false    # if true, shuffle pool instead of free random
+worlds: [ ]               # empty = all worlds
+
+# Only process blocks in this Y range (inclusive)
+minY: 60
+maxY: 320
+
+# Treat water/lava as "exposed" neighbors as well as air
+considerLiquidsAsSurface: true
+
+# --- Performance ---
+maxBlocksPerTick: 400     # block changes per tick per scheduled chunk task
+maxBlocksPerChunkCap: 0   # 0 = unlimited; else cap # processed per chunk task
+
+# Anything here is always excluded in addition to hardcoded categories
+excludeMaterials:
+  - AIR
+  - CAVE_AIR
+  - VOID_AIR
+  - WATER
+  - LAVA
+  - POWDER_SNOW
+  - BEDROCK
+  - END_PORTAL
+  - END_GATEWAY
+  - NETHER_PORTAL
+  - STRUCTURE_BLOCK
+  - JIGSAW
+  - BARRIER
+  - COMMAND_BLOCK
+  - REPEATING_COMMAND_BLOCK
+  - CHAIN_COMMAND_BLOCK
+  - LIGHT
+  - FARMLAND
+  - CAULDRON
+  - WATER_CAULDRON
+  - LAVA_CAULDRON
+  - POWDER_SNOW_CAULDRON
+  - CAMPFIRE
+  - SOUL_CAMPFIRE
+  - COMPOSTER
+  - LECTERN
+  - ANVIL
+  - CHIPPED_ANVIL
+  - DAMAGED_ANVIL
+  - BREWING_STAND
+  - BEACON
+  - CONDUIT
+  - JUKEBOX
+  - SCULK_SENSOR
+  - SCULK_SHRIEKER
