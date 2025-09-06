@@ -1,0 +1,44 @@
+seed: -1
+includeAir: false
+oneToOneMapping: false
+worlds: [ ]
+
+# Performance settings
+maxBlocksPerTick: 500   # cap the number of block changes per tick
+
+excludeMaterials:
+  - AIR
+  - CAVE_AIR
+  - VOID_AIR
+  - WATER
+  - LAVA
+  - POWDER_SNOW
+  - BEDROCK
+  - END_PORTAL
+  - END_GATEWAY
+  - NETHER_PORTAL
+  - STRUCTURE_BLOCK
+  - JIGSAW
+  - BARRIER
+  - COMMAND_BLOCK
+  - REPEATING_COMMAND_BLOCK
+  - CHAIN_COMMAND_BLOCK
+  - LIGHT
+  - FARMLAND
+  - CAULDRON
+  - WATER_CAULDRON
+  - LAVA_CAULDRON
+  - POWDER_SNOW_CAULDRON
+  - CAMPFIRE
+  - SOUL_CAMPFIRE
+  - COMPOSTER
+  - LECTERN
+  - ANVIL
+  - CHIPPED_ANVIL
+  - DAMAGED_ANVIL
+  - BREWING_STAND
+  - BEACON
+  - CONDUIT
+  - JUKEBOX
+  - SCULK_SENSOR
+  - SCULK_SHRIEKER
