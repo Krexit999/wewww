@@ -50,21 +50,25 @@ public final class ChunkRandomizeListener implements Listener {
                 int yStart = yCursor;
                 int yEnd = Math.min(yCursor + yStep - 1, maxY);
 
-                for (int y = yStart; y <= yEnd; y++) {
-                    for (int x = 0; x < 16; x++) {
-                        for (int z = 0; z < 16; z++) {
-                            Block b = world.getBlockAt(cx + x, y, cz + z);
-                            Material src = b.getType();
-                            if (!src.isBlock()) continue;
-                            if (!plugin.getConfig().getBoolean("includeAir", false) && src.isAir()) continue;
-                            if (excluded.contains(src)) continue;
-                            Material dst = map.get(src);
-                            if (dst != null && dst != src) {
-                                b.setType(dst, false);
-                            }
-                        }
-                    }
-                }
+for (int x = 0; x < 16; x++) {
+    for (int z = 0; z < 16; z++) {
+        int worldX = cx + x;
+        int worldZ = cz + z;
+
+        Block b = world.getHighestBlockAt(worldX, worldZ);
+        Material src = b.getType();
+
+        if (!src.isBlock()) continue;
+        if (!plugin.getConfig().getBoolean("includeAir", false) && src.isAir()) continue;
+        if (excluded.contains(src)) continue;
+
+        Material dst = map.get(src);
+        if (dst != null && dst != src) {
+            b.setType(dst, false);
+        }
+    }
+}
+
                 yCursor = yEnd + 1;
                 if (yCursor > maxY) { cancel(); }
             }
