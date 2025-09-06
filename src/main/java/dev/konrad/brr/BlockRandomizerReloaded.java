@@ -225,7 +225,7 @@ public class BlockRandomizerReloaded extends JavaPlugin {
             if (excludedCategories.contains("SCULK_SHRIEKER") && name.contains("SCULK_SHRIEKER")) continue;
 
             // Specific blacklist additions
-            if (name.equals("DRAGON_EGG") || name.equals("BUDDING_AMETHYST") || name.equals("REDSTONE_BLOCK") || name.equals("SNOW") || name.equals("BELL") || name.equals("END_ROD") || name.equals("LIGHTNING_ROD") || name.equals("IRON_BARS") || name.equals("JUKEBOX") || name.equals("NOTE_BLOCK")) {
+            if (name.equals("DRAGON_EGG") || name.equals("BUDDING_AMETHYST") || name.equals("REDSTONE_BLOCK") || name.equals("SNOW") || name.equals("BELL") || name.equals("END_ROD") || name.equals("LIGHTNING_ROD") || name.equals("IRON_BARS") || name.equals("JUKEBOX") || name.equals("NOTE_BLOCK") || name.equals("DRIPSTONE_BLOCK")) {
                 continue;
             }
 
@@ -250,15 +250,15 @@ public class BlockRandomizerReloaded extends JavaPlugin {
     }
 
     private boolean matchesNonFullOrThin(String n) {
-        return n.contains("SLAB") || n.contains("STAIRS") || n.contains("WALL") || n.contains("FENCE_GATE") || (n.endsWith("_FENCE") || n.equals("FENCE")) || n.contains("PANE") || n.equals("IRON_BARS") || n.equals("CHAIN") || n.endsWith("_BANNER") || n.endsWith("_BED") || n.endsWith("_CARPET") || n.equals("SNOW") || n.endsWith("_TRAPDOOR") || n.endsWith("_DOOR") || n.endsWith("_BUTTON") || n.equals("LEVER") || n.endsWith("PRESSURE_PLATE") || n.endsWith("_SIGN") || n.endsWith("_WALL_SIGN") || n.endsWith("TORCH") || n.endsWith("_LANTERN") || n.endsWith("_CANDLE") || n.endsWith("_ROD") || n.equals("LADDER") || n.equals("VINE") || n.equals("SCAFFOLDING") || n.equals("CAMPFIRE") || n.equals("SOUL_CAMPFIRE") || n.equals("SEA_PICKLE") || n.equals("FLOWER_POT");
+        return n.contains("SLAB") || n.contains("STAIRS") || n.contains("WALL") || n.contains("FENCE_GATE") || (n.endsWith("_FENCE") || n.equals("FENCE")) || n.contains("PANE") || n.equals("IRON_BARS") || n.equals("CHAIN") || n.endsWith("_BANNER") || n.endsWith("_BED") || n.endsWith("_CARPET") || n.equals("SNOW") || n.endsWith("_TRAPDOOR") || n.endsWith("_DOOR") || n.endsWith("_BUTTON") || n.equals("LEVER") || n.endsWith("PRESSURE_PLATE") || n.endsWith("_SIGN") || n.endsWith("_WALL_SIGN") || n.endsWith("TORCH") || n.equals("LANTERN") || n.endsWith("_LANTERN") || n.contains("CANDLE") || n.endsWith("_ROD") || n.equals("LADDER") || n.equals("VINE") || n.equals("SCAFFOLDING") || n.equals("CAMPFIRE") || n.equals("SOUL_CAMPFIRE") || n.equals("SEA_PICKLE") || n.equals("FLOWER_POT") || n.equals("CAKE") || n.contains("CAULDRON") || n.equals("POINTED_DRIPSTONE") || n.equals("AMETHYST_CLUSTER") || n.endsWith("_AMETHYST_BUD");
     }
 
     private boolean matchesPlantOrFoliage(String n) {
-        return n.endsWith("_FLOWER") || n.endsWith("_FLOWERS") || n.endsWith("_SAPLING") || n.endsWith("_MUSHROOM") || n.contains("TALL_") || n.equals("GRASS") || n.equals("FERN") || n.equals("LARGE_FERN") || n.equals("SWEET_BERRY_BUSH") || n.contains("LEAVES") || n.contains("SEAGRASS") || n.contains("KELP") || n.contains("VINES") || n.contains("CORAL") || n.contains("CORAL_FAN") || n.contains("CORAL_BLOCK") || n.contains("AZALEA") || n.contains("HANGING_ROOTS") || n.contains("MANGROVE_PROPAGULE") || n.contains("BAMBOO");
+        return n.endsWith("_FLOWER") || n.endsWith("_FLOWERS") || n.endsWith("_SAPLING") || n.endsWith("_MUSHROOM") || n.contains("TALL_") || n.equals("GRASS") || n.equals("FERN") || n.equals("LARGE_FERN") || n.equals("SWEET_BERRY_BUSH") || n.contains("LEAVES") || n.contains("SEAGRASS") || n.contains("KELP") || n.contains("VINES") || n.contains("CORAL") || n.contains("CORAL_FAN") || n.contains("CORAL_BLOCK") || n.contains("AZALEA") || n.contains("HANGING_ROOTS") || n.contains("MANGROVE_PROPAGULE") || n.contains("BAMBOO") || n.equals("CACTUS") || n.contains("TURTLE_EGG");
     }
 
     private boolean matchesRedstoneOrUpdateable(String n) {
-        return n.equals("REDSTONE_BLOCK") || n.equals("REDSTONE_WIRE") || n.equals("REPEATER") || n.equals("COMPARATOR") || n.contains("OBSERVER") || n.contains("RAIL") || n.equals("DAYLIGHT_DETECTOR") || n.contains("PISTON") || n.equals("SLIME_BLOCK") || n.equals("HONEY_BLOCK") || n.equals("TARGET") || n.contains("SCULK_SENSOR") || n.contains("SCULK_SHRIEKER") || n.contains("SCULK_CATALYST") || n.equals("SCULK") || n.equals("SCULK_VEIN") || n.equals("SCULK_BLOCK") || n.equals("TNT");
+        return n.equals("REDSTONE_BLOCK") || n.equals("REDSTONE_WIRE") || n.equals("REPEATER") || n.equals("COMPARATOR") || n.contains("OBSERVER") || n.contains("RAIL") || n.equals("DAYLIGHT_DETECTOR") || n.contains("PISTON") || n.equals("SLIME_BLOCK") || n.equals("HONEY_BLOCK") || n.equals("TARGET") || n.contains("SCULK_SENSOR") || n.contains("SCULK_SHRIEKER") || n.contains("SCULK_CATALYST") || n.equals("SCULK") || n.equals("SCULK_VEIN") || n.equals("SCULK_BLOCK") || n.equals("TNT") || n.contains("COMMAND_BLOCK");
     }
 
     private boolean matchesPortalOrSpecial(String n) {
@@ -379,8 +379,11 @@ public class BlockRandomizerReloaded extends JavaPlugin {
                 int[] p = queue.pollFirst();
                 int lx = p[0], y = p[1], lz = p[2];
                 Block b = chunk.getBlock(lx, y, lz);
-                // Exposure check
-                if (isExposedToAirOrLiquid(chunk, lx, y, lz)) {
+                Material src = b.getType();
+                // Only affect blocks touching air/liquid, never replace AIR or liquids themselves
+                if (src.isAir() || src == Material.WATER || src == Material.LAVA) {
+                    // Skip changing air or liquids
+                } else if (isExposedToAirOrLiquid(chunk, lx, y, lz)) {
                     // Guard against containers/spawners
                     if (!isBlockEntityOrProtected(b)) {
                         // Pick and set
