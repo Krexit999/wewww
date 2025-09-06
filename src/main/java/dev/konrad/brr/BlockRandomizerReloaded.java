@@ -199,7 +199,8 @@ public class BlockRandomizerReloaded extends JavaPlugin {
         for (Material m : Material.values()) {
             if (!m.isBlock()) continue;
             if (m.isAir()) continue;
-            if (m.isLiquid()) continue;
+            // Avoid liquids: Material does not expose isLiquid() reliably across API versions
+            if (m == Material.WATER || m == Material.LAVA) continue;
             if (hasGravity(m)) continue;
             if (!m.isSolid()) continue; // restrict to solid blocks (full-cube or translucent solids)
             String name = m.name();
