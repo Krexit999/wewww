@@ -45,3 +45,7 @@ log:
 under:
   depth: 3      # also replace this many blocks below the surface
   min-y: 30     # do not replace below this Y for under-replacements
+
+palette:
+  enabled: true
+  rotation-seconds: 60   # rotate to a new mapping every N seconds
