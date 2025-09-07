@@ -8,6 +8,7 @@ commands:
     description: Block Randomizer Reloaded commands
     usage: /<command> <reload|stats|here|rotate>
     permission: brr.admin
+    aliases: [br]
 permissions:
   brr.admin:
     description: Allows using /brr commands
