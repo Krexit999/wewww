@@ -25,24 +25,32 @@ public class NetherLavaWaterListener implements Listener {
         boolean enabled = plugin.getConfig().getConfigurationSection("trolling") == null ||
                 plugin.getConfig().getConfigurationSection("trolling").getBoolean("nether-water.enabled", true);
         if (!enabled) return;
-        Bukkit.getScheduler().runTask(plugin, () -> replaceLavaInChunk(c));
+        // Budgeted processing to avoid lag spikes
+        Bukkit.getScheduler().runTask(plugin, () -> replaceLavaInChunkBudgeted(c));
     }
 
-    private void replaceLavaInChunk(Chunk chunk) {
+    private void replaceLavaInChunkBudgeted(Chunk chunk) {
         World w = chunk.getWorld();
-        int minY = w.getMinHeight();
-        int maxY = w.getMaxHeight() - 1;
-        for (int x = 0; x < 16; x++) {
-            for (int z = 0; z < 16; z++) {
-                for (int y = minY; y <= maxY; y++) {
-                    Material t = chunk.getBlock(x, y, z).getType();
-                    if (t == Material.LAVA) {
-                        // set still water; may evaporate in vanilla but we honor the request
-                        chunk.getBlock(x, y, z).setType(Material.WATER, false);
-                    }
+        final int minY = w.getMinHeight();
+        final int maxY = w.getMaxHeight() - 1;
+        final int[] state = new int[]{0, minY, 0}; // x, y, z
+        final int opsPerTick = 2048; // tuneable budget
+        final org.bukkit.scheduler.BukkitTask[] handle = new org.bukkit.scheduler.BukkitTask[1];
+        handle[0] = Bukkit.getScheduler().runTaskTimer(plugin, () -> {
+            int ops = 0;
+            while (ops < opsPerTick) {
+                int x = state[0], y = state[1], z = state[2];
+                Material t = chunk.getBlock(x, y, z).getType();
+                if (t == Material.LAVA) {
+                    chunk.getBlock(x, y, z).setType(Material.WATER, false);
                 }
+                // advance
+                state[1]++;
+                if (state[1] > maxY) { state[1] = minY; state[2]++; }
+                if (state[2] > 15) { state[2] = 0; state[0]++; }
+                if (state[0] > 15) { handle[0].cancel(); return; }
+                ops++;
             }
-        }
+        }, 1L, 1L);
     }
 }
-
