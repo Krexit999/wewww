@@ -12,7 +12,7 @@ import org.bukkit.inventory.ItemStack;
 import java.util.Map;
 
 public class BlockBreakDropListener implements Listener {
-    public Material getPaletteReplacement(Material source) {
+    private final BlockRandomizerReloaded plugin;
 
     public BlockBreakDropListener(BlockRandomizerReloaded plugin) {
         this.plugin = plugin;
@@ -27,7 +27,8 @@ public class BlockBreakDropListener implements Listener {
         if (gm == GameMode.CREATIVE) return; // avoid creative spam; adjust if desired
 
         Material source = event.getBlock().getType();
-        Material replacement = plugin.getPaletteReplacement(source);
+        // Use drop palette: allows categories disallowed for world placement (still no water/lava)
+        Material replacement = plugin.getDropPaletteReplacement(source);
         if (replacement == null) return;
         if (replacement == Material.WATER || replacement == Material.LAVA) return; // paranoia guard
 
