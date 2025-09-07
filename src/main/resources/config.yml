@@ -42,3 +42,6 @@ tick-budget-ms: 2.0
 log:
   changed-blocks: false
 
+under:
+  depth: 3      # also replace this many blocks below the surface
+  min-y: 57     # do not replace below this Y for under-replacements
