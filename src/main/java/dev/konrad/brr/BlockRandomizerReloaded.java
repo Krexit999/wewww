@@ -48,11 +48,13 @@ public class BlockRandomizerReloaded extends JavaPlugin {
 
     private final Map<String, BukkitTask> activeChunkTasks = new HashMap<>();
     private BukkitTask periodicTask;
+    private BukkitTask paletteTask;
 
     // Stats
     private long statBlocksChanged = 0L;
     private long statChunksQueued = 0L;
     private long statTasksCompleted = 0L;
+    private int paletteEpoch = 0;
 
     @Override
     public void onEnable() {
@@ -149,6 +151,48 @@ public class BlockRandomizerReloaded extends JavaPlugin {
                 }
             }, periodTicks, periodTicks);
         }
+        schedulePaletteRotation();
+    }
+
+    private void schedulePaletteRotation() {
+        if (paletteTask != null) {
+            paletteTask.cancel();
+            paletteTask = null;
+        }
+        boolean paletteEnabled = getConfig().getConfigurationSection("palette") == null || getConfig().getConfigurationSection("palette").getBoolean("enabled", true);
+        int rotateSec = getConfig().getConfigurationSection("palette") != null ? getConfig().getConfigurationSection("palette").getInt("rotation-seconds", 60) : 60;
+        if (paletteEnabled && rotateSec > 0) {
+            long ticks = Math.max(20L, rotateSec * 20L);
+            paletteTask = Bukkit.getScheduler().runTaskTimer(this, () -> rotatePalette(), ticks, ticks);
+        }
+    }
+
+    private final Map<Material, Material> paletteMap = new EnumMap<>(Material.class);
+
+    private void rotatePalette() {
+        paletteMap.clear();
+        paletteEpoch++;
+        getLogger().info("BRR palette rotated. Epoch=" + paletteEpoch);
+    }
+
+    private Material getPaletteReplacement(Material source) {
+        Material rep = paletteMap.get(source);
+        if (rep != null) return rep;
+        // Choose a deterministic-ish random per source per epoch
+        // But for simplicity, just pick a random allowed material not equal to source
+        Material picked = pickReplacementNotSource(source);
+        paletteMap.put(source, picked);
+        return picked;
+    }
+
+    private Material pickReplacementNotSource(Material source) {
+        Material pick = pickRandomMaterial(rng);
+        // try a few times to avoid identical replacement
+        for (int i = 0; i < 8 && pick == source; i++) {
+            pick = pickRandomMaterial(rng);
+        }
+        if (pick == Material.WATER || pick == Material.LAVA) return Material.STONE;
+        return pick;
     }
 
     private void buildProtectedSourceBlocks() {
@@ -457,7 +501,7 @@ public class BlockRandomizerReloaded extends JavaPlugin {
             if (current.isAir() || current == Material.WATER || current == Material.LAVA) continue;
             Block target = chunk.getBlock(x, yy, z);
             if (isBlockEntityOrProtected(target)) continue;
-            Material pick = pickRandomMaterial(rng);
+            Material pick = getPaletteReplacement(current);
             if (isAllowedReplacement(pick) && pick != current) {
                 target.setType(pick, false);
                 statBlocksChanged++;
@@ -474,7 +518,7 @@ public class BlockRandomizerReloaded extends JavaPlugin {
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
         if (!command.getName().equalsIgnoreCase("brr")) return false;
         if (args.length == 0) {
-            sender.sendMessage("/brr reload | /brr stats | /brr here");
+            sender.sendMessage("/brr reload | /brr stats | /brr here | /brr rotate");
             return true;
         }
         String sub = args[0].toLowerCase();
@@ -501,6 +545,14 @@ public class BlockRandomizerReloaded extends JavaPlugin {
             Player p = (Player) sender;
             queueChunk(p.getLocation().getChunk());
             sender.sendMessage("BRR: queued current chunk for randomization.");
+            return true;
+        } else if (sub.equals("rotate")) {
+            if (!sender.hasPermission("brr.admin")) {
+                sender.sendMessage("You don't have permission.");
+                return true;
+            }
+            rotatePalette();
+            sender.sendMessage("BRR: palette rotated. Epoch=" + paletteEpoch);
             return true;
         }
         return false;
