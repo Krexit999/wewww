@@ -28,7 +28,7 @@ public class BlockBreakDropListener implements Listener {
 
         Material source = event.getBlock().getType();
         // Use drop palette: allows categories disallowed for world placement (still no water/lava)
-        Material replacement = plugin.getDropPaletteReplacement(source);
+        Material replacement = plugin.getPaletteReplacement(source);
         if (replacement == null) return;
         if (replacement == Material.WATER || replacement == Material.LAVA) return; // paranoia guard
 
