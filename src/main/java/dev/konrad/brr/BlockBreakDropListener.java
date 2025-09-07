@@ -12,7 +12,7 @@ import org.bukkit.inventory.ItemStack;
 import java.util.Map;
 
 public class BlockBreakDropListener implements Listener {
-    private final BlockRandomizerReloaded plugin;
+    public Material getPaletteReplacement(Material source) {
 
     public BlockBreakDropListener(BlockRandomizerReloaded plugin) {
         this.plugin = plugin;
