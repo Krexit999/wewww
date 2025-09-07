@@ -13,6 +13,7 @@ import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitTask;
+import org.bukkit.block.data.Waterlogged;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -173,7 +174,14 @@ public class BlockRandomizerReloaded extends JavaPlugin {
     private void rotatePalette() {
         paletteMap.clear();
         paletteEpoch++;
-        getLogger().info("BRR palette rotated. Epoch=" + paletteEpoch);
+        getLogger().info("BRR palette rotated. Epoch=" + paletteEpoch + ". Re-queueing loaded chunks...");
+        // Re-queue all loaded chunks to apply new palette mapping
+        for (World w : Bukkit.getWorlds()) {
+            if (!isWorldEnabled(w)) continue;
+            for (Chunk c : w.getLoadedChunks()) {
+                queueChunk(c);
+            }
+        }
     }
 
     private Material getPaletteReplacement(Material source) {
@@ -259,6 +267,7 @@ public class BlockRandomizerReloaded extends JavaPlugin {
             if (m == Material.WATER || m == Material.LAVA) continue;
             if (hasGravity(m)) continue;
             if (!m.isSolid()) continue; // restrict to solid blocks (full-cube or translucent solids)
+            if (isWaterloggable(m)) continue; // avoid waterloggable blocks entirely
             String name = m.name();
 
             if (matchesNonFullOrThin(name)) continue;
@@ -294,7 +303,16 @@ public class BlockRandomizerReloaded extends JavaPlugin {
             if (m == null || !m.isBlock()) continue;
             if (m == Material.WATER || m == Material.LAVA) continue; // never allow liquids via overrides
             if (m.name().equals("ICE") || m.name().equals("FROSTED_ICE")) continue; // avoid melting to water
+            if (isWaterloggable(m)) continue;
             replacementWhitelist.add(m);
+        }
+    }
+
+    private boolean isWaterloggable(Material m) {
+        try {
+            return m.createBlockData() instanceof Waterlogged;
+        } catch (Throwable t) {
+            return false;
         }
     }
 
@@ -409,9 +427,19 @@ public class BlockRandomizerReloaded extends JavaPlugin {
         return false;
     }
 
+    private static final EnumSet<Material> FLOWERS = EnumSet.of(
+            // Small flowers (1.19.2)
+            Material.DANDELION, Material.POPPY, Material.BLUE_ORCHID, Material.ALLIUM,
+            Material.AZURE_BLUET, Material.RED_TULIP, Material.ORANGE_TULIP, Material.WHITE_TULIP,
+            Material.PINK_TULIP, Material.OXEYE_DAISY, Material.CORNFLOWER, Material.LILY_OF_THE_VALLEY,
+            Material.WITHER_ROSE,
+            // Tall flowers
+            Material.SUNFLOWER, Material.LILAC, Material.ROSE_BUSH, Material.PEONY
+    );
+
     private boolean isFlowerOrGrass(Material m) {
+        if (FLOWERS.contains(m)) return true;
         String n = m.name();
-        if (n.endsWith("_FLOWER") || n.endsWith("_FLOWERS")) return true;
         if (n.equals("GRASS") || n.equals("TALL_GRASS") || n.equals("FERN") || n.equals("LARGE_FERN")) return true;
         if (n.equals("SNOW")) return true; // snow layers: target the block underneath
         return false;
@@ -493,23 +521,36 @@ public class BlockRandomizerReloaded extends JavaPlugin {
     private void applyChainAt(Chunk chunk, int x, int y, int z, Set<Long> touched) {
         World w = chunk.getWorld();
         int minFloor = Math.max(w.getMinHeight(), underMinY);
-        for (int d = 0; d <= underDepth; d++) {
-            int yy = y - d;
-            if (yy < minFloor) break;
-            Material current = chunk.getBlock(x, yy, z).getType();
-            long key = (((long) yy) << 8) | ((long) (x & 0xF) << 4) | (long) (z & 0xF);
-            if (touched.contains(key)) continue;
-            if (current.isAir() || current == Material.WATER || current == Material.LAVA) continue;
-            Block target = chunk.getBlock(x, yy, z);
-            if (isBlockEntityOrProtected(target)) continue;
-            Material pick = getPaletteReplacement(current);
-            if (isAllowedReplacement(pick) && pick != current) {
-                target.setType(pick, false);
-                statBlocksChanged++;
-                touched.add(key);
-                if (logChangedBlocks) {
-                    getLogger().info("Changed block at " + target.getLocation() + " -> " + pick);
-                }
+        int maxCeil = w.getMaxHeight() - 1;
+        // base
+        processAt(chunk, x, y, z, touched);
+        // extend 6 directions up to underDepth
+        for (int d = 1; d <= underDepth; d++) {
+            if (y + d <= maxCeil) processAt(chunk, x, y + d, z, touched);
+            if (y - d >= minFloor) processAt(chunk, x, y - d, z, touched);
+            if (x + d <= 15) processAt(chunk, x + d, y, z, touched);
+            if (x - d >= 0) processAt(chunk, x - d, y, z, touched);
+            if (z + d <= 15) processAt(chunk, x, y, z + d, touched);
+            if (z - d >= 0) processAt(chunk, x, y, z - d, touched);
+        }
+    }
+
+    private void processAt(Chunk chunk, int x, int y, int z, Set<Long> touched) {
+        World w = chunk.getWorld();
+        if (!withinWorldY(w, y)) return;
+        Material current = chunk.getBlock(x, y, z).getType();
+        long key = (((long) y) << 8) | ((long) (x & 0xF) << 4) | (long) (z & 0xF);
+        if (touched.contains(key)) return;
+        if (current.isAir() || current == Material.WATER || current == Material.LAVA) return;
+        Block target = chunk.getBlock(x, y, z);
+        if (isBlockEntityOrProtected(target)) return;
+        Material pick = getPaletteReplacement(current);
+        if (isAllowedReplacement(pick) && pick != current) {
+            target.setType(pick, false);
+            statBlocksChanged++;
+            touched.add(key);
+            if (logChangedBlocks) {
+                getLogger().info("Changed block at " + target.getLocation() + " -> " + pick);
             }
         }
     }
