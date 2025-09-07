@@ -65,6 +65,7 @@ public class BlockRandomizerReloaded extends JavaPlugin {
 
         // Listener
         Bukkit.getPluginManager().registerEvents(new ChunkRandomizeListener(this), this);
+        Bukkit.getPluginManager().registerEvents(new BlockBreakDropListener(this), this);
 
         // Optional periodic timer
         scheduleOrCancelPeriodic();
