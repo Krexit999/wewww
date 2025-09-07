@@ -27,7 +27,7 @@ public class BlockBreakDropListener implements Listener {
         if (gm == GameMode.CREATIVE) return; // avoid creative spam; adjust if desired
 
         Material source = event.getBlock().getType();
-        Material replacement = plugin.getDropPaletteReplacement(source);
+        Material replacement = plugin.getPaletteReplacement(source);
         if (replacement == null) return;
         if (replacement == Material.WATER || replacement == Material.LAVA) return; // paranoia guard
 
