@@ -1,0 +1,122 @@
+enabled-worlds: ["world"]
+min-y: 30
+max-y: 320
+
+trigger:
+  on-chunk-load: true
+  periodic-seconds: 0
+
+exposure-neighbors: ["AIR", "WATER", "LAVA"]
+
+preserve-natural:
+  chests: true
+  spawners: true
+
+exclusions:
+  categories:
+    - LIQUIDS
+    - GRAVITY
+    - NON_FULL_BLOCKS
+    - PLANTS
+    - REDSTONE
+    - CONTAINERS
+    - PORTALS
+    - SCULK_SENSORS
+    - SCULK_SHRIEKER
+  materials:
+    - DRAGON_EGG
+    - BUDDING_AMETHYST
+    - REDSTONE_BLOCK
+    - SNOW
+    - BELL
+    - END_ROD
+    - LIGHTNING_ROD
+    - IRON_BARS
+    - JUKEBOX
+    - NOTE_BLOCK
+
+whitelist-overrides: []
+
+tick-budget-ms: 2.0
+
+log:
+  changed-blocks: false
+
+under:
+  depth: 3      # also replace this many blocks below the surface
+  min-y: 30     # do not replace below this Y for under-replacements
+
+palette:
+  enabled: true
+  rotation-seconds: 300   # rotate to a new mapping every N seconds (5 minutes)
+
+# Fun trolling features
+trolling:
+  potion-randomize:
+    enabled: true   # Randomize both drink and thrown potion effects
+  sounds:
+    enabled: true
+    # How often to check per player
+    check-period-ticks: 100   # 5 seconds
+    # Chance per check to play a sound near a player
+    per-check-chance: 0.03    # 3%
+    # Optional list of sounds; names must match Bukkit Sound enum
+    list:
+      - ENTITY_CREEPER_PRIMED
+      - ENTITY_GHAST_SCREAM
+      - ENTITY_ENDERMAN_SCREAM
+      - ENTITY_PHANTOM_AMBIENT
+      - BLOCK_PORTAL_TRAVEL
+      - ENTITY_GENERIC_EXPLODE
+  fake-messages:
+    enabled: true
+    min-minutes: 2
+    max-minutes: 20
+    messages:
+      - "§eYou feel a presence watching you…"
+      - "§cYour memory fades for a moment…"
+      - "§7A cold breeze creeps down your spine."
+      - "§5Whispers echo from beneath the ground."
+      - "§6Your hands tremble, then steady."
+      - "§dYou swear you heard footsteps behind you."
+      - "§bYour compass spins wildly, then stops."
+      - "§fThe world feels slightly … off."
+      - "§2The plants seem to lean toward you."
+      - "§4Something growls in the dark."
+      - "§3A faint humming fills your ears."
+      - "§8Shadows flicker at the edge of your vision."
+  block-break-mob:
+    enabled: true
+    chance: 0.05         # 5% chance on block break
+    exclude-bosses: false # allow Ender Dragon/Wither to spawn
+  weather-time:
+    # If true, each palette rotation also randomizes weather and time
+    randomize-on-palette-rotate: true
+  random-teleport:
+    enabled: true
+    min-minutes: 1        # minimum delay between teleports
+    max-minutes: 20       # maximum delay between teleports
+    min-distance-blocks: 1
+    max-distance-blocks: 10
+    min-cooldown-seconds: 30  # do not teleport same player again within this window
+  hand-swap:
+    enabled: true
+    min-minutes: 2
+    max-minutes: 15
+    min-cooldown-seconds: 30
+  ghost-items:
+    enabled: true
+    min-minutes: 2
+    max-minutes: 10
+    count-min: 1
+    count-max: 2
+    duration-seconds: 30
+  hunger-jumps:
+    enabled: true
+    min-minutes: 2
+    max-minutes: 12
+    delta-min: -6
+    delta-max: 6
+    min-cooldown-seconds: 20
+  nether-water:
+    enabled: true

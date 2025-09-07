@@ -1,0 +1,15 @@
+name: BlockRandomizerReloaded
+main: dev.konrad.brr.BlockRandomizerReloaded
+version: 1.0.0
+api-version: '1.19'
+author: konrad
+commands:
+  brr:
+    description: Block Randomizer Reloaded commands
+    usage: /<command> <reload|stats|here|rotate>
+    permission: brr.admin
+    aliases: [br]
+permissions:
+  brr.admin:
+    description: Allows using /brr commands
+    default: op
