@@ -49,6 +49,7 @@ under:
 palette:
   enabled: true
   rotation-seconds: 300   # rotate to a new mapping every N seconds (5 minutes)
+  requeue-per-tick: 5     # how many loaded chunks to requeue per tick after rotation
 
 # Fun trolling features
 trolling:
