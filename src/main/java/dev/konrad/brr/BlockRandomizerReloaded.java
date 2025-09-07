@@ -918,6 +918,8 @@ public class BlockRandomizerReloaded extends JavaPlugin {
 
     // Helpers used by listeners
     public boolean isWorldEnabled(World w) {
+        // If '*' present, or list empty, treat as all worlds enabled
+        if (enabledWorldNames.isEmpty() || enabledWorldNames.contains("*")) return true;
         return enabledWorldNames.contains(w.getName());
     }
 
