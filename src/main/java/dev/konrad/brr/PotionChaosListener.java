@@ -33,7 +33,8 @@ public class PotionChaosListener implements Listener {
         if (!isEnabled()) return;
         EntityPotionEffectEvent.Cause cause = event.getCause();
         if (cause != EntityPotionEffectEvent.Cause.POTION_DRINK) return;
-        LivingEntity le = event.getEntity();
+        if (!(event.getEntity() instanceof LivingEntity)) return;
+        LivingEntity le = (LivingEntity) event.getEntity();
         World w = le.getWorld();
         if (!plugin.isWorldEnabled(w)) return;
         // avoid interfering with plugin-applied effects
