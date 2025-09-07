@@ -1020,7 +1020,13 @@ public class BlockRandomizerReloaded extends JavaPlugin {
 
         int worldMin = world.getMinHeight();
         int worldMax = world.getMaxHeight() - 1;
-        int yFrom = Math.max(minY, worldMin);
+        int yFrom;
+        World.Environment env = world.getEnvironment();
+        if (env == World.Environment.NETHER || env == World.Environment.THE_END) {
+            yFrom = Math.max(0, worldMin);
+        } else {
+            yFrom = Math.max(minY, worldMin);
+        }
         int yTo = Math.min(maxY, worldMax);
         if (yFrom > yTo) return;
 
@@ -1124,7 +1130,7 @@ public class BlockRandomizerReloaded extends JavaPlugin {
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
         if (!command.getName().equalsIgnoreCase("brr")) return false;
         if (args.length == 0) {
-            sender.sendMessage("/brr reload | /brr stats | /brr here | /brr rotate");
+            sender.sendMessage("/brr reload | stats | here | rotate | sound [player] | ghost [player] | teleport [player] | handswap [player] | hunger [player] | message");
             return true;
         }
         String sub = args[0].toLowerCase();
@@ -1160,7 +1166,125 @@ public class BlockRandomizerReloaded extends JavaPlugin {
             rotatePalette();
             sender.sendMessage("BRR: palette rotated. Epoch=" + paletteEpoch);
             return true;
+        } else if (sub.equals("sound")) {
+            if (!sender.hasPermission("brr.admin")) { sender.sendMessage("You don't have permission."); return true; }
+            Player target = resolveTargetPlayer(sender, args, 1);
+            if (target == null) { sender.sendMessage("Usage: /brr sound [player]"); return true; }
+            triggerRandomSound(target);
+            sender.sendMessage("Played random sound near " + target.getName());
+            return true;
+        } else if (sub.equals("ghost")) {
+            if (!sender.hasPermission("brr.admin")) { sender.sendMessage("You don't have permission."); return true; }
+            Player target = resolveTargetPlayer(sender, args, 1);
+            if (target == null) { sender.sendMessage("Usage: /brr ghost [player]"); return true; }
+            insertGhostItems(target, Math.max(1, ghostPerEventMin));
+            sender.sendMessage("Inserted ghost item(s) into " + target.getName() + "'s inventory");
+            return true;
+        } else if (sub.equals("teleport")) {
+            if (!sender.hasPermission("brr.admin")) { sender.sendMessage("You don't have permission."); return true; }
+            Player target = resolveTargetPlayer(sender, args, 1);
+            if (target == null) { sender.sendMessage("Usage: /brr teleport [player]"); return true; }
+            randomTeleportPlayer(target);
+            sender.sendMessage("Teleported " + target.getName());
+            return true;
+        } else if (sub.equals("handswap")) {
+            if (!sender.hasPermission("brr.admin")) { sender.sendMessage("You don't have permission."); return true; }
+            Player target = resolveTargetPlayer(sender, args, 1);
+            if (target == null) { sender.sendMessage("Usage: /brr handswap [player]"); return true; }
+            handSwapOnce(target);
+            sender.sendMessage("Swapped hands for " + target.getName());
+            return true;
+        } else if (sub.equals("hunger")) {
+            if (!sender.hasPermission("brr.admin")) { sender.sendMessage("You don't have permission."); return true; }
+            Player target = resolveTargetPlayer(sender, args, 1);
+            if (target == null) { sender.sendMessage("Usage: /brr hunger [player]"); return true; }
+            hungerJumpOnce(target);
+            sender.sendMessage("Adjusted hunger for " + target.getName());
+            return true;
+        } else if (sub.equals("message")) {
+            if (!sender.hasPermission("brr.admin")) { sender.sendMessage("You don't have permission."); return true; }
+            broadcastRandomFakeMessage();
+            sender.sendMessage("Broadcasted a fake message.");
+            return true;
         }
         return false;
+    }
+
+    private Player resolveTargetPlayer(CommandSender sender, String[] args, int idx) {
+        if (args.length > idx) {
+            Player p = Bukkit.getPlayerExact(args[idx]);
+            if (p != null) return p;
+            // try partial match
+            for (Player op : Bukkit.getOnlinePlayers()) {
+                if (op.getName().toLowerCase().startsWith(args[idx].toLowerCase())) return op;
+            }
+            return null;
+        }
+        if (sender instanceof Player) return (Player) sender;
+        return null;
+    }
+
+    private void triggerRandomSound(Player p) {
+        if (!soundsEnabled || prankSounds.isEmpty()) return;
+        if (!isWorldEnabled(p.getWorld())) return;
+        Sound snd = prankSounds.get(rng.nextInt(prankSounds.size()));
+        Location base = p.getLocation();
+        double dx = (rng.nextDouble() * 10.0) - 5.0;
+        double dz = (rng.nextDouble() * 10.0) - 5.0;
+        Location at = base.clone().add(dx, 0, dz);
+        p.playSound(at, snd, 1.2f, 1.0f + (float)((rng.nextDouble() - 0.5) * 0.4));
+    }
+
+    private void insertGhostItems(Player p, int count) {
+        if (!ghostItemsEnabled) return;
+        if (!isWorldEnabled(p.getWorld())) return;
+        for (int i = 0; i < count; i++) {
+            int slot = pickRandomEmptyInventorySlot(p);
+            if (slot < 0) break;
+            org.bukkit.inventory.ItemStack ghost = makeGhostItem();
+            p.getInventory().setItem(slot, ghost);
+            long removeDelay = Math.max(20L, ghostDurationSeconds * 20L);
+            Bukkit.getScheduler().runTaskLater(this, () -> {
+                org.bukkit.inventory.ItemStack cur = p.getInventory().getItem(slot);
+                if (cur != null && isGhostItem(cur)) {
+                    p.getInventory().setItem(slot, null);
+                }
+            }, removeDelay);
+        }
+    }
+
+    private void randomTeleportPlayer(Player p) {
+        if (!teleportEnabled) return;
+        if (!isWorldEnabled(p.getWorld())) return;
+        Location dest = findSafeTeleportNear(p, tpMinDistance, tpMaxDistance);
+        if (dest != null) {
+            dest.setYaw((float) rng.nextInt(360));
+            dest.setPitch(p.getLocation().getPitch());
+            p.teleport(dest);
+        }
+    }
+
+    private void handSwapOnce(Player p) {
+        if (!handSwapEnabled) return;
+        if (!isWorldEnabled(p.getWorld())) return;
+        org.bukkit.inventory.PlayerInventory inv = p.getInventory();
+        org.bukkit.inventory.ItemStack main = inv.getItemInMainHand();
+        org.bukkit.inventory.ItemStack off = inv.getItemInOffHand();
+        inv.setItemInMainHand(off);
+        inv.setItemInOffHand(main);
+    }
+
+    private void hungerJumpOnce(Player p) {
+        if (!hungerEnabled) return;
+        if (!isWorldEnabled(p.getWorld())) return;
+        int delta = hungerMinDelta + rng.nextInt(Math.max(1, hungerMaxDelta - hungerMinDelta + 1));
+        int newFood = Math.max(0, Math.min(20, p.getFoodLevel() + delta));
+        p.setFoodLevel(newFood);
+    }
+
+    private void broadcastRandomFakeMessage() {
+        if (!fakeMessagesEnabled || fakeMessages.isEmpty()) return;
+        String msg = fakeMessages.get(rng.nextInt(fakeMessages.size()));
+        Bukkit.broadcastMessage(msg);
     }
 }
