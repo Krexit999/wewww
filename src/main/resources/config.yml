@@ -48,4 +48,4 @@ under:
 
 palette:
   enabled: true
-  rotation-seconds: 60   # rotate to a new mapping every N seconds
+  rotation-seconds: 300   # rotate to a new mapping every N seconds (5 minutes)
