@@ -1,5 +1,5 @@
 enabled-worlds: ["world"]
-min-y: 60
+min-y: 30
 max-y: 320
 
 trigger:
@@ -44,4 +44,4 @@ log:
 
 under:
   depth: 3      # also replace this many blocks below the surface
-  min-y: 57     # do not replace below this Y for under-replacements
+  min-y: 30     # do not replace below this Y for under-replacements
