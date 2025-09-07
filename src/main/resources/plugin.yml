@@ -6,7 +6,7 @@ author: konrad
 commands:
   brr:
     description: Block Randomizer Reloaded commands
-    usage: /<command> <reload|stats|here>
+    usage: /<command> <reload|stats|here|rotate>
     permission: brr.admin
 permissions:
   brr.admin:
