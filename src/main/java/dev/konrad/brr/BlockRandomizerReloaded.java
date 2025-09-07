@@ -185,7 +185,7 @@ public class BlockRandomizerReloaded extends JavaPlugin {
         }
     }
 
-    private Material getPaletteReplacement(Material source) {
+    public Material getPaletteReplacement(Material source) {
         Material rep = paletteMap.get(source);
         if (rep != null) return rep;
         // Choose a deterministic-ish random per source per epoch
@@ -195,7 +195,7 @@ public class BlockRandomizerReloaded extends JavaPlugin {
         return picked;
     }
 
-    private Material pickReplacementNotSource(Material source) {
+    public Material pickReplacementNotSource(Material source) {
         Material pick = pickRandomMaterial(rng);
         // try a few times to avoid identical replacement
         for (int i = 0; i < 8 && pick == source; i++) {
@@ -205,7 +205,7 @@ public class BlockRandomizerReloaded extends JavaPlugin {
         return pick;
     }
 
-    private void buildProtectedSourceBlocks() {
+    public void buildProtectedSourceBlocks() {
         // Containers and block entities to never modify
         // Chests
         addIfPresent(protectedSourceBlocks, "CHEST");
