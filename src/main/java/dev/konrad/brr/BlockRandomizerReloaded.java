@@ -304,8 +304,15 @@ public class BlockRandomizerReloaded extends JavaPlugin {
 
     public Material pickRandomMaterial(Random r) {
         if (replacementList.isEmpty()) return Material.STONE;
-        int idx = r.nextInt(replacementList.size());
-        return replacementList.get(idx);
+        // Hard guard: never return WATER or LAVA even if somehow present
+        for (int attempts = 0; attempts < 10; attempts++) {
+            int idx = r.nextInt(replacementList.size());
+            Material pick = replacementList.get(idx);
+            if (pick != Material.WATER && pick != Material.LAVA) {
+                return pick;
+            }
+        }
+        return Material.STONE;
     }
 
     public boolean isExposedToAirOrLiquid(Chunk chunk, int x, int y, int z) {
@@ -357,7 +364,9 @@ public class BlockRandomizerReloaded extends JavaPlugin {
     private boolean isFlowerOrGrass(Material m) {
         String n = m.name();
         if (n.endsWith("_FLOWER") || n.endsWith("_FLOWERS")) return true;
-        return n.equals("GRASS") || n.equals("TALL_GRASS") || n.equals("FERN") || n.equals("LARGE_FERN");
+        if (n.equals("GRASS") || n.equals("TALL_GRASS") || n.equals("FERN") || n.equals("LARGE_FERN")) return true;
+        if (n.equals("SNOW")) return true; // snow layers: target the block underneath
+        return false;
     }
 
     public boolean shouldTriggerOnChunkLoad() {
