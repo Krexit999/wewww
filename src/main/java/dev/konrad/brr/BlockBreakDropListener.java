@@ -27,8 +27,8 @@ public class BlockBreakDropListener implements Listener {
         if (gm == GameMode.CREATIVE) return; // avoid creative spam; adjust if desired
 
         Material source = event.getBlock().getType();
-        Material replacement = plugin.getPaletteReplacement(source);
-        if (replacement == null || !plugin.isAllowedReplacement(replacement)) return;
+        Material replacement = plugin.getDropPaletteReplacement(source);
+        if (replacement == null) return;
         if (replacement == Material.WATER || replacement == Material.LAVA) return; // paranoia guard
 
         // Replace default drops with a single stack of the mapped block
@@ -40,4 +40,3 @@ public class BlockBreakDropListener implements Listener {
         }
     }
 }
-
