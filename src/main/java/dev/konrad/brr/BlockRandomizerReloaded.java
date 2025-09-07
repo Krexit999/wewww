@@ -225,7 +225,7 @@ public class BlockRandomizerReloaded extends JavaPlugin {
             if (excludedCategories.contains("SCULK_SHRIEKER") && name.contains("SCULK_SHRIEKER")) continue;
 
             // Specific blacklist additions
-            if (name.equals("DRAGON_EGG") || name.equals("BUDDING_AMETHYST") || name.equals("REDSTONE_BLOCK") || name.equals("SNOW") || name.equals("BELL") || name.equals("END_ROD") || name.equals("LIGHTNING_ROD") || name.equals("IRON_BARS") || name.equals("JUKEBOX") || name.equals("NOTE_BLOCK") || name.equals("DRIPSTONE_BLOCK")) {
+            if (name.equals("DRAGON_EGG") || name.equals("BUDDING_AMETHYST") || name.equals("REDSTONE_BLOCK") || name.equals("SNOW") || name.equals("BELL") || name.equals("END_ROD") || name.equals("LIGHTNING_ROD") || name.equals("IRON_BARS") || name.equals("JUKEBOX") || name.equals("NOTE_BLOCK") || name.equals("DRIPSTONE_BLOCK") || name.equals("LECTERN") || name.equals("CRAFTING_TABLE") || name.equals("FARMLAND") || name.equals("STRUCTURE_BLOCK") || name.equals("STRUCTURE_VOID") || name.equals("JIGSAW") || name.equals("BARRIER") || name.equals("LIGHT") || name.equals("ICE")) {
                 continue;
             }
 
@@ -258,7 +258,7 @@ public class BlockRandomizerReloaded extends JavaPlugin {
     }
 
     private boolean matchesRedstoneOrUpdateable(String n) {
-        return n.equals("REDSTONE_BLOCK") || n.equals("REDSTONE_WIRE") || n.equals("REPEATER") || n.equals("COMPARATOR") || n.contains("OBSERVER") || n.contains("RAIL") || n.equals("DAYLIGHT_DETECTOR") || n.contains("PISTON") || n.equals("SLIME_BLOCK") || n.equals("HONEY_BLOCK") || n.equals("TARGET") || n.contains("SCULK_SENSOR") || n.contains("SCULK_SHRIEKER") || n.contains("SCULK_CATALYST") || n.equals("SCULK") || n.equals("SCULK_VEIN") || n.equals("SCULK_BLOCK") || n.equals("TNT") || n.contains("COMMAND_BLOCK");
+        return n.equals("REDSTONE_BLOCK") || n.equals("REDSTONE_WIRE") || n.equals("REPEATER") || n.equals("COMPARATOR") || n.contains("OBSERVER") || n.contains("RAIL") || n.equals("DAYLIGHT_DETECTOR") || n.contains("PISTON") || n.equals("SLIME_BLOCK") || n.equals("HONEY_BLOCK") || n.equals("TARGET") || n.contains("SCULK_SENSOR") || n.contains("SCULK_SHRIEKER") || n.contains("SCULK_CATALYST") || n.equals("SCULK") || n.equals("SCULK_VEIN") || n.equals("SCULK_BLOCK") || n.equals("TNT") || n.contains("COMMAND_BLOCK") || n.equals("LECTERN") || n.equals("CRAFTING_TABLE") || n.equals("FARMLAND") || n.equals("STRUCTURE_BLOCK") || n.equals("STRUCTURE_VOID") || n.equals("JIGSAW") || n.equals("BARRIER") || n.equals("LIGHT");
     }
 
     private boolean matchesPortalOrSpecial(String n) {
@@ -335,10 +335,18 @@ public class BlockRandomizerReloaded extends JavaPlugin {
     public boolean isBlockEntityOrProtected(Block b) {
         Material t = b.getType();
         if (protectedSourceBlocks.contains(t)) return true;
+        // Do not replace flowers or grass (tall and small variants)
+        if (isFlowerOrGrass(t)) return true;
         // Config toggles: preserve natural chests/spawners
         if (t == Material.SPAWNER && getConfig().getConfigurationSection("preserve-natural").getBoolean("spawners", true)) return true;
         if ((t == Material.CHEST || t == Material.TRAPPED_CHEST || t == Material.ENDER_CHEST) && getConfig().getConfigurationSection("preserve-natural").getBoolean("chests", true)) return true;
         return false;
+    }
+
+    private boolean isFlowerOrGrass(Material m) {
+        String n = m.name();
+        if (n.endsWith("_FLOWER") || n.endsWith("_FLOWERS")) return true;
+        return n.equals("GRASS") || n.equals("TALL_GRASS") || n.equals("FERN") || n.equals("LARGE_FERN");
     }
 
     public boolean shouldTriggerOnChunkLoad() {
@@ -421,7 +429,7 @@ public class BlockRandomizerReloaded extends JavaPlugin {
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
         if (!command.getName().equalsIgnoreCase("brr")) return false;
         if (args.length == 0) {
-            sender.sendMessage("/brr reload | /brr stats");
+            sender.sendMessage("/brr reload | /brr stats | /brr here");
             return true;
         }
         String sub = args[0].toLowerCase();
@@ -435,6 +443,19 @@ public class BlockRandomizerReloaded extends JavaPlugin {
             return true;
         } else if (sub.equals("stats")) {
             sender.sendMessage("BRR stats: changed=" + statBlocksChanged + ", chunksQueued=" + statChunksQueued + ", tasksCompleted=" + statTasksCompleted + ", whitelist=" + replacementWhitelist.size());
+            return true;
+        } else if (sub.equals("here")) {
+            if (!(sender instanceof Player)) {
+                sender.sendMessage("/brr here can only be run by a player.");
+                return true;
+            }
+            if (!sender.hasPermission("brr.admin")) {
+                sender.sendMessage("You don't have permission.");
+                return true;
+            }
+            Player p = (Player) sender;
+            queueChunk(p.getLocation().getChunk());
+            sender.sendMessage("BRR: queued current chunk for randomization.");
             return true;
         }
         return false;
