@@ -236,7 +236,7 @@ public class BlockRandomizerReloaded extends JavaPlugin {
             if (excludedCategories.contains("SCULK_SHRIEKER") && name.contains("SCULK_SHRIEKER")) continue;
 
             // Specific blacklist additions
-            if (name.equals("DRAGON_EGG") || name.equals("BUDDING_AMETHYST") || name.equals("REDSTONE_BLOCK") || name.equals("SNOW") || name.equals("BELL") || name.equals("END_ROD") || name.equals("LIGHTNING_ROD") || name.equals("IRON_BARS") || name.equals("JUKEBOX") || name.equals("NOTE_BLOCK") || name.equals("DRIPSTONE_BLOCK") || name.equals("LECTERN") || name.equals("CRAFTING_TABLE") || name.equals("FARMLAND") || name.equals("STRUCTURE_BLOCK") || name.equals("STRUCTURE_VOID") || name.equals("JIGSAW") || name.equals("BARRIER") || name.equals("LIGHT") || name.equals("ICE")) {
+            if (name.equals("DRAGON_EGG") || name.equals("BUDDING_AMETHYST") || name.equals("REDSTONE_BLOCK") || name.equals("SNOW") || name.equals("BELL") || name.equals("END_ROD") || name.equals("LIGHTNING_ROD") || name.equals("IRON_BARS") || name.equals("JUKEBOX") || name.equals("NOTE_BLOCK") || name.equals("DRIPSTONE_BLOCK") || name.equals("LECTERN") || name.equals("CRAFTING_TABLE") || name.equals("FARMLAND") || name.equals("STRUCTURE_BLOCK") || name.equals("STRUCTURE_VOID") || name.equals("JIGSAW") || name.equals("BARRIER") || name.equals("LIGHT") || name.equals("ICE") || name.equals("FROSTED_ICE")) {
                 continue;
             }
 
@@ -246,7 +246,10 @@ public class BlockRandomizerReloaded extends JavaPlugin {
         // Explicit whitelist overrides
         for (String s : whitelistOverrides) {
             Material m = safeMaterial(s);
-            if (m != null && m.isBlock()) replacementWhitelist.add(m);
+            if (m == null || !m.isBlock()) continue;
+            if (m == Material.WATER || m == Material.LAVA) continue; // never allow liquids via overrides
+            if (m.name().equals("ICE") || m.name().equals("FROSTED_ICE")) continue; // avoid melting to water
+            replacementWhitelist.add(m);
         }
     }
 
