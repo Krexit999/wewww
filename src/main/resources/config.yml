@@ -1,4 +1,4 @@
-enabled-worlds: ["world"]
+enabled-worlds: ["*"]
 min-y: 30
 max-y: 320
 
