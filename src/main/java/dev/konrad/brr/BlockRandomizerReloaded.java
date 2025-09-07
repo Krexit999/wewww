@@ -239,6 +239,9 @@ public class BlockRandomizerReloaded extends JavaPlugin {
         addIfPresent(protectedSourceBlocks, "CARTOGRAPHY_TABLE");
         addIfPresent(protectedSourceBlocks, "SMITHING_TABLE");
         addIfPresent(protectedSourceBlocks, "COMPOSTER");
+        addIfPresent(protectedSourceBlocks, "LECTERN");
+        addIfPresent(protectedSourceBlocks, "CRAFTING_TABLE");
+        addIfPresent(protectedSourceBlocks, "FLETCHING_TABLE");
         addIfPresent(protectedSourceBlocks, "BEE_NEST");
         addIfPresent(protectedSourceBlocks, "BEEHIVE");
         // Heads/skulls
@@ -419,8 +422,13 @@ public class BlockRandomizerReloaded extends JavaPlugin {
     public boolean isBlockEntityOrProtected(Block b) {
         Material t = b.getType();
         if (protectedSourceBlocks.contains(t)) return true;
+        // Never replace any door block as a source
+        String tn = t.name();
+        if (tn.endsWith("_DOOR")) return true;
         // Do not replace flowers or grass (tall and small variants)
         if (isFlowerOrGrass(t)) return true;
+        // Preserve common workstations even if not block entities
+        if (t == Material.LECTERN || t == Material.CRAFTING_TABLE || tn.equals("FLETCHING_TABLE")) return true;
         // Config toggles: preserve natural chests/spawners
         if (t == Material.SPAWNER && getConfig().getConfigurationSection("preserve-natural").getBoolean("spawners", true)) return true;
         if ((t == Material.CHEST || t == Material.TRAPPED_CHEST || t == Material.ENDER_CHEST) && getConfig().getConfigurationSection("preserve-natural").getBoolean("chests", true)) return true;
