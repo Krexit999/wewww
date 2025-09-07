@@ -64,6 +64,9 @@ public class BlockRandomizerReloaded extends JavaPlugin {
     private BukkitTask handSwapTask;
     private BukkitTask ghostItemTask;
     private BukkitTask hungerTask;
+    private BukkitTask requeueTask;
+    private final ArrayDeque<Chunk> requeueQueue = new ArrayDeque<>();
+    private int requeuePerTick = 5;
 
     // Prank config caches
     private List<Sound> prankSounds = new ArrayList<>();
@@ -174,6 +177,11 @@ public class BlockRandomizerReloaded extends JavaPlugin {
             hungerTask.cancel();
             hungerTask = null;
         }
+        if (requeueTask != null) {
+            requeueTask.cancel();
+            requeueTask = null;
+            requeueQueue.clear();
+        }
     }
 
     public void reloadConfigAndRebuildWhitelist() {
@@ -278,13 +286,33 @@ public class BlockRandomizerReloaded extends JavaPlugin {
         if (randomizeWeatherOnRotate) {
             randomizeWeatherAndTime();
         }
-        // Re-queue all loaded chunks to apply new palette mapping
+        // Re-queue loaded chunks gradually to avoid lag spikes
+        requeueQueue.clear();
         for (World w : Bukkit.getWorlds()) {
             if (!isWorldEnabled(w)) continue;
             for (Chunk c : w.getLoadedChunks()) {
-                queueChunk(c);
+                requeueQueue.add(c);
             }
         }
+        if (requeueTask != null) { requeueTask.cancel(); requeueTask = null; }
+        // read knob (fallback to current value)
+        int perTick = requeuePerTick;
+        ConfigurationSection palSec = getConfig().getConfigurationSection("palette");
+        if (palSec != null) perTick = Math.max(1, palSec.getInt("requeue-per-tick", requeuePerTick));
+        requeuePerTick = perTick;
+        requeueTask = Bukkit.getScheduler().runTaskTimer(this, () -> {
+            int n = 0;
+            while (n < requeuePerTick && !requeueQueue.isEmpty()) {
+                Chunk c = requeueQueue.pollFirst();
+                if (c != null) queueChunk(c);
+                n++;
+            }
+            if (requeueQueue.isEmpty()) {
+                BukkitTask t = requeueTask;
+                if (t != null) t.cancel();
+                requeueTask = null;
+            }
+        }, 1L, 1L);
     }
 
     private void randomizeWeatherAndTime() {
@@ -518,48 +546,7 @@ public class BlockRandomizerReloaded extends JavaPlugin {
         }
     }
 
-    private Location findSafeTeleportNear(Player p, int minDist, int maxDist) {
-        World w = p.getWorld();
-        Location base = p.getLocation();
-        WorldBorder border = w.getWorldBorder();
-        int attempts = 20;
-        for (int i = 0; i < attempts; i++) {
-            double angle = rng.nextDouble() * Math.PI * 2.0;
-            int dist = minDist + rng.nextInt(Math.max(1, (maxDist - minDist + 1)));
-            double dx = Math.cos(angle) * dist;
-            double dz = Math.sin(angle) * dist;
-            int tx = base.getBlockX() + (int) Math.round(dx);
-            int tz = base.getBlockZ() + (int) Math.round(dz);
-
-            // Try around same Y first
-            int by = base.getBlockY();
-            Integer yCandidate = findStableYNear(w, tx, tz, by);
-            if (yCandidate == null) {
-                // fallback to surface at x/z
-                int topY = w.getHighestBlockYAt(tx, tz);
-                if (withinWorldY(w, topY)) {
-                    if (isSafeStand(w, tx, topY + 1, tz)) yCandidate = topY + 1;
-                }
-            }
-            if (yCandidate == null) continue;
-
-            Location loc = new Location(w, tx + 0.5, yCandidate + 0.01, tz + 0.5);
-            if (border != null && !border.isInside(loc)) continue;
-            return loc;
-        }
-        return null;
-    }
-
-    private Integer findStableYNear(World w, int x, int z, int aroundY) {
-        int minYw = w.getMinHeight();
-        int maxYw = w.getMaxHeight() - 2;
-        for (int dy = 2; dy >= -6; dy--) {
-            int y = aroundY + dy;
-            if (y < minYw || y > maxYw) continue;
-            if (isSafeStand(w, x, y, z)) return y;
-        }
-        return null;
-    }
+    
 
     private boolean isSafeStand(World w, int x, int y, int z) {
         Material feet = w.getBlockAt(x, y, z).getType();
@@ -577,6 +564,61 @@ public class BlockRandomizerReloaded extends JavaPlugin {
         if (m == Material.LAVA || m == Material.WATER) return true;
         if (n.equals("MAGMA_BLOCK") || n.equals("FIRE") || n.equals("CAMPFIRE") || n.equals("SOUL_CAMPFIRE") || n.equals("CACTUS") || n.equals("SWEET_BERRY_BUSH")) return true;
         return false;
+    }
+
+    // Prefer surface-level teleports; avoid underground or sky, avoid Nether roof
+    private Location findSafeTeleportNear(Player p, int minDist, int maxDist) {
+        World w = p.getWorld();
+        Location base = p.getLocation();
+        WorldBorder border = w.getWorldBorder();
+        int attempts = 24;
+        boolean isNether = w.getEnvironment() == World.Environment.NETHER;
+        for (int i = 0; i < attempts; i++) {
+            double angle = rng.nextDouble() * Math.PI * 2.0;
+            int dist = minDist + rng.nextInt(Math.max(1, (maxDist - minDist + 1)));
+            int tx = base.getBlockX() + (int) Math.round(Math.cos(angle) * dist);
+            int tz = base.getBlockZ() + (int) Math.round(Math.sin(angle) * dist);
+
+            Integer yCandidate;
+            if (isNether) {
+                yCandidate = findNetherSurfaceY(w, tx, tz);
+            } else {
+                yCandidate = findOverworldSurfaceY(w, tx, tz);
+            }
+            if (yCandidate == null) continue;
+            Location loc = new Location(w, tx + 0.5, yCandidate + 0.01, tz + 0.5);
+            if (border != null && !border.isInside(loc)) continue;
+            return loc;
+        }
+        return null;
+    }
+
+    private Integer findOverworldSurfaceY(World w, int x, int z) {
+        int topY = w.getHighestBlockYAt(x, z);
+        if (!withinWorldY(w, topY)) return null;
+        int y = topY + 1;
+        if (!withinWorldY(w, y)) return null;
+        if (isSafeStand(w, x, y, z)) return y;
+        // small downward search to avoid leaves/carpets
+        for (int dy = 0; dy < 6; dy++) {
+            int yy = topY - dy;
+            if (!withinWorldY(w, yy + 1)) break;
+            if (isSafeStand(w, x, yy + 1, z)) return yy + 1;
+        }
+        return null;
+    }
+
+    private Integer findNetherSurfaceY(World w, int x, int z) {
+        int maxTop = Math.min(126, w.getMaxHeight() - 2); // avoid roof >126
+        // Scan downward from ceiling to find first safe standing spot under bedrock roof
+        for (int y = maxTop; y >= w.getMinHeight() + 2; y--) {
+            if (isSafeStand(w, x, y, z)) {
+                // Ensure below isn't bedrock ceiling with air pocket above (prevents roof)
+                Material below = w.getBlockAt(x, y - 1, z).getType();
+                if (below != Material.BEDROCK) return y;
+            }
+        }
+        return null;
     }
 
     private void scheduleNextHandSwap() {
@@ -654,21 +696,45 @@ public class BlockRandomizerReloaded extends JavaPlugin {
     }
 
     private org.bukkit.inventory.ItemStack makeGhostItem() {
-        Material m = pickRandomMaterial(rng);
-        if (m == Material.AIR) m = Material.STONE;
+        Material m = pickValuableMaterial();
+        if (m == null || m == Material.AIR) m = Material.DIAMOND_BLOCK;
         org.bukkit.inventory.ItemStack it = new org.bukkit.inventory.ItemStack(m, 1);
         org.bukkit.inventory.meta.ItemMeta meta = it.getItemMeta();
         if (meta != null) {
-            meta.setDisplayName("§7Ghost Item");
-            java.util.List<String> lore = new java.util.ArrayList<>();
-            lore.add("§8(Disappears when clicked)");
-            meta.setLore(lore);
+            // Keep vanilla-looking name; only tag via PDC
             if (ghostKey != null) {
                 meta.getPersistentDataContainer().set(ghostKey, PersistentDataType.BYTE, (byte)1);
             }
             it.setItemMeta(meta);
         }
         return it;
+    }
+
+    private static final Material[] VALUABLES = new Material[]{
+            // Blocks and ores
+            Material.NETHERITE_BLOCK, Material.DIAMOND_BLOCK, Material.EMERALD_BLOCK, Material.ANCIENT_DEBRIS,
+            Material.DIAMOND_ORE, Material.DEEPSLATE_DIAMOND_ORE, Material.EMERALD_ORE, Material.DEEPSLATE_EMERALD_ORE,
+            Material.GOLD_BLOCK, Material.GOLD_ORE, Material.DEEPSLATE_GOLD_ORE,
+            Material.IRON_BLOCK,
+            // Items
+            Material.ELYTRA, Material.NETHERITE_INGOT, Material.NETHER_STAR, Material.TOTEM_OF_UNDYING,
+            Material.ENCHANTED_GOLDEN_APPLE, Material.GOLDEN_APPLE,
+            // Tools/armor
+            Material.NETHERITE_SWORD, Material.NETHERITE_PICKAXE, Material.NETHERITE_AXE, Material.NETHERITE_SHOVEL,
+            Material.NETHERITE_HELMET, Material.NETHERITE_CHESTPLATE, Material.NETHERITE_LEGGINGS, Material.NETHERITE_BOOTS,
+            Material.DIAMOND_SWORD, Material.DIAMOND_PICKAXE, Material.DIAMOND_AXE, Material.DIAMOND_SHOVEL,
+            Material.DIAMOND_HELMET, Material.DIAMOND_CHESTPLATE, Material.DIAMOND_LEGGINGS, Material.DIAMOND_BOOTS,
+            // Rares
+            Material.DRAGON_EGG, Material.DRAGON_HEAD, Material.BEACON, Material.SHULKER_BOX
+    };
+
+    private Material pickValuableMaterial() {
+        // ensure materials exist for this MC version; fallback to diamond block
+        for (int attempts = 0; attempts < 6; attempts++) {
+            Material m = VALUABLES[rng.nextInt(VALUABLES.length)];
+            if (m != null) return m;
+        }
+        return Material.DIAMOND_BLOCK;
     }
 
     public boolean isGhostItem(org.bukkit.inventory.ItemStack it) {
