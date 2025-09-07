@@ -41,6 +41,8 @@ public class BlockRandomizerReloaded extends JavaPlugin {
     private int maxY = 320;
     private double tickBudgetMs = 2.0;
     private boolean logChangedBlocks = false;
+    private int underDepth = 3; // number of blocks below the surface to also replace
+    private int underMinY = 57; // minimum Y for under-replacements
 
     private final Random rng = new Random();
 
@@ -108,6 +110,15 @@ public class BlockRandomizerReloaded extends JavaPlugin {
 
         tickBudgetMs = cfg.getDouble("tick-budget-ms", 2.0);
         logChangedBlocks = cfg.getConfigurationSection("log") != null && cfg.getConfigurationSection("log").getBoolean("changed-blocks", false);
+
+        ConfigurationSection underSec = cfg.getConfigurationSection("under");
+        if (underSec != null) {
+            underDepth = Math.max(0, underSec.getInt("depth", 3));
+            underMinY = underSec.getInt("min-y", 57);
+        } else {
+            underDepth = 3;
+            underMinY = 57;
+        }
 
         // Protected source blocks (never modify original if matches)
         protectedSourceBlocks.clear();
@@ -380,6 +391,7 @@ public class BlockRandomizerReloaded extends JavaPlugin {
         statChunksQueued++;
         long nanosBudget = (long) (tickBudgetMs * 1_000_000.0);
         final int maxOpsPerTick = 200;
+        final Set<Long> touched = new HashSet<>();
         BukkitTask task = Bukkit.getScheduler().runTaskTimer(this, () -> {
             long start = System.nanoTime();
             int ops = 0;
@@ -388,21 +400,18 @@ public class BlockRandomizerReloaded extends JavaPlugin {
                 int lx = p[0], y = p[1], lz = p[2];
                 Block b = chunk.getBlock(lx, y, lz);
                 Material src = b.getType();
-                // Only affect blocks touching air/liquid, never replace AIR or liquids themselves
+                // Never replace AIR or liquids as source
                 if (src.isAir() || src == Material.WATER || src == Material.LAVA) {
-                    // Skip changing air or liquids
-                } else if (isExposedToAirOrLiquid(chunk, lx, y, lz)) {
-                    // Guard against containers/spawners
-                    if (!isBlockEntityOrProtected(b)) {
-                        // Pick and set
-                        Material pick = pickRandomMaterial(rng);
-                        if (isAllowedReplacement(pick) && pick != b.getType()) {
-                            b.setType(pick, false);
-                            statBlocksChanged++;
-                            if (logChangedBlocks) {
-                                getLogger().info("Changed block at " + b.getLocation() + " -> " + pick);
-                            }
+                    // skip
+                } else {
+                    boolean isPlantTop = isFlowerOrGrass(src);
+                    if (isPlantTop) {
+                        int anchorY = y - 1;
+                        if (withinWorldY(chunk.getWorld(), anchorY)) {
+                            applyChainAt(chunk, lx, anchorY, lz, touched);
                         }
+                    } else if (isExposedToAirOrLiquid(chunk, lx, y, lz)) {
+                        applyChainAt(chunk, lx, y, lz, touched);
                     }
                 }
 
@@ -422,6 +431,30 @@ public class BlockRandomizerReloaded extends JavaPlugin {
 
     private String chunkKey(Chunk c) {
         return c.getWorld().getName() + ":" + c.getX() + ":" + c.getZ();
+    }
+
+    private void applyChainAt(Chunk chunk, int x, int y, int z, Set<Long> touched) {
+        World w = chunk.getWorld();
+        int minFloor = Math.max(w.getMinHeight(), underMinY);
+        for (int d = 0; d <= underDepth; d++) {
+            int yy = y - d;
+            if (yy < minFloor) break;
+            Material current = chunk.getBlock(x, yy, z).getType();
+            long key = (((long) yy) << 8) | ((long) (x & 0xF) << 4) | (long) (z & 0xF);
+            if (touched.contains(key)) continue;
+            if (current.isAir() || current == Material.WATER || current == Material.LAVA) continue;
+            Block target = chunk.getBlock(x, yy, z);
+            if (isBlockEntityOrProtected(target)) continue;
+            Material pick = pickRandomMaterial(rng);
+            if (isAllowedReplacement(pick) && pick != current) {
+                target.setType(pick, false);
+                statBlocksChanged++;
+                touched.add(key);
+                if (logChangedBlocks) {
+                    getLogger().info("Changed block at " + target.getLocation() + " -> " + pick);
+                }
+            }
+        }
     }
 
     // Simple inline command handler to avoid extra boilerplate file
