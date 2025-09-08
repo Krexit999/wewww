@@ -18,7 +18,6 @@ import org.bukkit.block.data.Waterlogged;
 import org.bukkit.Sound;
 import org.bukkit.entity.EntityType;
 import org.bukkit.WorldBorder;
-import org.bukkit.entity.Player;
 import org.bukkit.NamespacedKey;
 import org.bukkit.persistence.PersistentDataType;
 
