@@ -125,10 +125,12 @@ public class BlockRandomizerReloaded extends JavaPlugin {
     // Drops config
     private boolean dropAllowNonBlockItems = true;
     private boolean dropIncludeValuables = true;
+    private double dropRegularItemChance = 0.05;   // 5% regular non-block items (tools/armor/potions/food)
+    private double dropValuableItemChance = 0.01;  // 1% curated valuables (elytra, totem, etc.)
     private int dropAmountMin = 1;
     private int dropAmountMax = 1;
     private boolean dropEnchantEnabled = true;
-    private double dropEnchantChance = 0.35;
+    private double dropEnchantChance = 0.01; // 1% enchant chance
     private int dropEnchantCountMin = 1;
     private int dropEnchantCountMax = 3;
     private int dropEnchantLevelMin = 1;
@@ -256,6 +258,7 @@ public class BlockRandomizerReloaded extends JavaPlugin {
         buildWhitelistFromConfig();
         replacementList = new ArrayList<>(replacementWhitelist);
         buildDropCandidates();
+        buildItemPools();
 
         // Reset stats? keep across reloads
         scheduleOrCancelPeriodic();
@@ -528,9 +531,11 @@ public class BlockRandomizerReloaded extends JavaPlugin {
         dropIncludeValuables = drops == null || drops.getBoolean("include-valuables", true);
         dropAmountMin = drops != null ? Math.max(1, drops.getInt("amount-min", 1)) : 1;
         dropAmountMax = drops != null ? Math.max(dropAmountMin, drops.getInt("amount-max", 1)) : 1;
+        dropRegularItemChance = drops != null ? Math.max(0.0, Math.min(1.0, drops.getDouble("regular-item-chance", 0.05))) : 0.05;
+        dropValuableItemChance = drops != null ? Math.max(0.0, Math.min(1.0, drops.getDouble("valuable-item-chance", 0.01))) : 0.01;
         ConfigurationSection enchant = drops != null ? drops.getConfigurationSection("enchant") : null;
         dropEnchantEnabled = enchant == null || enchant.getBoolean("enabled", true);
-        dropEnchantChance = enchant != null ? Math.max(0.0, Math.min(1.0, enchant.getDouble("chance", 0.35))) : 0.35;
+        dropEnchantChance = enchant != null ? Math.max(0.0, Math.min(1.0, enchant.getDouble("chance", 0.01))) : 0.01;
         dropEnchantCountMin = enchant != null ? Math.max(1, enchant.getInt("count-min", 1)) : 1;
         dropEnchantCountMax = enchant != null ? Math.max(dropEnchantCountMin, enchant.getInt("count-max", 3)) : 3;
         dropEnchantLevelMin = enchant != null ? Math.max(1, enchant.getInt("level-min", 1)) : 1;
@@ -836,27 +841,48 @@ public class BlockRandomizerReloaded extends JavaPlugin {
     }
 
     private final Set<Material> dropCandidates = EnumSet.noneOf(Material.class);
-    private List<Material> dropList = new ArrayList<>();
-    // Curated important non-block items to include in drops when enabled
+    private List<Material> dropList = new ArrayList<>(); // blocks only
+    // Curated important non-block items (valuables, very rare)
     private static final Material[] IMPORTANT_DROP_ITEMS = new Material[] {
             // Rares / progression
             Material.ELYTRA, Material.TOTEM_OF_UNDYING, Material.NETHER_STAR,
             Material.NETHERITE_INGOT, Material.ANCIENT_DEBRIS,
-            Material.ENCHANTED_GOLDEN_APPLE, Material.GOLDEN_APPLE,
+            Material.ENCHANTED_GOLDEN_APPLE,
             Material.HEART_OF_THE_SEA, Material.BEACON, Material.SHULKER_BOX,
             Material.DRAGON_HEAD, Material.DRAGON_EGG,
-            // Tools/Weapons/Armor (diamond + netherite)
-            Material.NETHERITE_SWORD, Material.NETHERITE_PICKAXE, Material.NETHERITE_AXE, Material.NETHERITE_SHOVEL,
-            Material.NETHERITE_HELMET, Material.NETHERITE_CHESTPLATE, Material.NETHERITE_LEGGINGS, Material.NETHERITE_BOOTS,
+            // High-tier gear
+            Material.TRIDENT,
             Material.DIAMOND_SWORD, Material.DIAMOND_PICKAXE, Material.DIAMOND_AXE, Material.DIAMOND_SHOVEL,
             Material.DIAMOND_HELMET, Material.DIAMOND_CHESTPLATE, Material.DIAMOND_LEGGINGS, Material.DIAMOND_BOOTS,
-            Material.TRIDENT, Material.BOW, Material.CROSSBOW, Material.SHIELD,
+            Material.NETHERITE_SWORD, Material.NETHERITE_PICKAXE, Material.NETHERITE_AXE, Material.NETHERITE_SHOVEL,
+            Material.NETHERITE_HELMET, Material.NETHERITE_CHESTPLATE, Material.NETHERITE_LEGGINGS, Material.NETHERITE_BOOTS,
+            // Rare utility
+            Material.ENCHANTED_BOOK
+    };
+    // Regular non-block items (tools/armor/potions/utility) at 5%
+    private static final Material[] REGULAR_ITEM_ITEMS = new Material[] {
+            // Mid-tier gear
+            Material.IRON_SWORD, Material.IRON_PICKAXE, Material.IRON_AXE, Material.IRON_SHOVEL,
+            Material.IRON_HELMET, Material.IRON_CHESTPLATE, Material.IRON_LEGGINGS, Material.IRON_BOOTS,
+            Material.GOLDEN_SWORD, Material.GOLDEN_PICKAXE, Material.GOLDEN_AXE, Material.GOLDEN_SHOVEL,
+            Material.GOLDEN_HELMET, Material.GOLDEN_CHESTPLATE, Material.GOLDEN_LEGGINGS, Material.GOLDEN_BOOTS,
+            Material.SHIELD, Material.BOW, Material.CROSSBOW,
             // Utility
-            Material.ENDER_PEARL, Material.ENDER_EYE, Material.EXPERIENCE_BOTTLE, Material.TURTLE_HELMET,
-            Material.ENCHANTED_BOOK,
-            // Potions
+            Material.ENDER_PEARL, Material.ENDER_EYE, Material.EXPERIENCE_BOTTLE,
+            // Potions (all kinds handled via meta)
             Material.POTION, Material.SPLASH_POTION, Material.LINGERING_POTION
     };
+    // Food items
+    private static final Material[] FOOD_ITEMS = new Material[] {
+            Material.BREAD, Material.COOKED_BEEF, Material.COOKED_PORKCHOP, Material.COOKED_CHICKEN,
+            Material.COOKED_MUTTON, Material.COOKED_RABBIT, Material.COOKED_COD, Material.COOKED_SALMON,
+            Material.GOLDEN_CARROT, Material.CARROT, Material.POTATO, Material.BAKED_POTATO,
+            Material.BEETROOT, Material.BEETROOT_SOUP, Material.MUSHROOM_STEW, Material.RABBIT_STEW,
+            Material.PUMPKIN_PIE, Material.COOKIE, Material.MELON_SLICE, Material.SWEET_BERRIES,
+            Material.GLOW_BERRIES, Material.HONEY_BOTTLE, Material.CHORUS_FRUIT
+    };
+    private final List<Material> valuableItemList = new ArrayList<>();
+    private final List<Material> regularItemList = new ArrayList<>();
 
     private void buildDropCandidates() {
         dropCandidates.clear();
@@ -864,28 +890,58 @@ public class BlockRandomizerReloaded extends JavaPlugin {
             if (!isValidDropMaterial(m)) continue;
             dropCandidates.add(m);
         }
-        // Add curated important non-block items if enabled
-        if (dropAllowNonBlockItems && dropIncludeValuables) {
-            for (Material it : IMPORTANT_DROP_ITEMS) {
-                if (it == null) continue;
-                // Don't include liquids or air for safety
-                if (it.isAir() || it == Material.WATER || it == Material.LAVA) continue;
-                try {
-                    // Ensure representable as an item
-                    boolean ok = true;
-                    try {
-                        if (!it.isItem()) ok = false;
-                    } catch (NoSuchMethodError ignored) {
-                        org.bukkit.inventory.ItemStack test = new org.bukkit.inventory.ItemStack(it, 1);
-                        if (test.getType() == Material.AIR) ok = false;
-                    }
-                    if (ok) dropCandidates.add(it);
-                } catch (Throwable ignored) {}
-            }
-        }
         dropList = new ArrayList<>(dropCandidates);
         if (dropList.isEmpty()) {
             dropList.add(Material.STONE);
+        }
+    }
+
+    private void buildItemPools() {
+        valuableItemList.clear();
+        regularItemList.clear();
+        if (dropAllowNonBlockItems && dropIncludeValuables) {
+            for (Material it : IMPORTANT_DROP_ITEMS) {
+                if (it == null || it.isAir() || it == Material.WATER || it == Material.LAVA) continue;
+                try {
+                    boolean ok = true;
+                    try { if (!it.isItem()) ok = false; } catch (NoSuchMethodError ignored) {
+                        org.bukkit.inventory.ItemStack test = new org.bukkit.inventory.ItemStack(it, 1);
+                        if (test.getType() == Material.AIR) ok = false;
+                    }
+                    if (ok) valuableItemList.add(it);
+                } catch (Throwable ignored) {}
+            }
+        }
+        if (dropAllowNonBlockItems) {
+            for (Material it : REGULAR_ITEM_ITEMS) {
+                if (it == null || it.isAir() || it == Material.WATER || it == Material.LAVA) continue;
+                try {
+                    boolean ok = true;
+                    try { if (!it.isItem()) ok = false; } catch (NoSuchMethodError ignored) {
+                        org.bukkit.inventory.ItemStack test = new org.bukkit.inventory.ItemStack(it, 1);
+                        if (test.getType() == Material.AIR) ok = false;
+                    }
+                    if (ok) regularItemList.add(it);
+                } catch (Throwable ignored) {}
+            }
+            for (Material it : FOOD_ITEMS) {
+                if (it == null || it.isAir()) continue;
+                try {
+                    boolean ok = true;
+                    try { if (!it.isItem()) ok = false; } catch (NoSuchMethodError ignored) {
+                        org.bukkit.inventory.ItemStack test = new org.bukkit.inventory.ItemStack(it, 1);
+                        if (test.getType() == Material.AIR) ok = false;
+                    }
+                    if (ok) regularItemList.add(it);
+                } catch (Throwable ignored) {}
+            }
+        }
+        // Fallback guards
+        if (valuableItemList.isEmpty() && dropIncludeValuables) {
+            valuableItemList.add(Material.ENCHANTED_BOOK);
+        }
+        if (regularItemList.isEmpty()) {
+            regularItemList.add(Material.POTION);
         }
     }
 
@@ -931,9 +987,26 @@ public class BlockRandomizerReloaded extends JavaPlugin {
 
     // Build an ItemStack for the random drop (may include meta and crazy enchants)
     public org.bukkit.inventory.ItemStack getRandomDropForSource(Material source) {
-        Material m = getDropPaletteReplacement(source);
-        if (m == null || m.isAir() || m == Material.WATER || m == Material.LAVA) return null;
-        org.bukkit.inventory.ItemStack base = buildBaseDropStack(m);
+        org.bukkit.inventory.ItemStack base;
+        // Weighted category selection: valuables (1%), regular items (5%), otherwise blocks
+        if (dropAllowNonBlockItems) {
+            double r = rng.nextDouble();
+            if (dropIncludeValuables && r < dropValuableItemChance && !valuableItemList.isEmpty()) {
+                Material pick = valuableItemList.get(rng.nextInt(valuableItemList.size()));
+                base = buildBaseDropStack(pick);
+            } else if (r < dropValuableItemChance + dropRegularItemChance && !regularItemList.isEmpty()) {
+                Material pick = regularItemList.get(rng.nextInt(regularItemList.size()));
+                base = buildBaseDropStack(pick);
+            } else {
+                Material m = getDropPaletteReplacement(source); // blocks only
+                if (m == null || m.isAir() || m == Material.WATER || m == Material.LAVA) return null;
+                base = buildBaseDropStack(m);
+            }
+        } else {
+            Material m = getDropPaletteReplacement(source);
+            if (m == null || m.isAir() || m == Material.WATER || m == Material.LAVA) return null;
+            base = buildBaseDropStack(m);
+        }
         // Amount randomization (respect max stack size)
         int amtMin = Math.max(1, dropAmountMin);
         int amtMax = Math.max(amtMin, dropAmountMax);
