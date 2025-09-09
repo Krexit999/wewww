@@ -804,19 +804,42 @@ public class BlockRandomizerReloaded extends JavaPlugin {
     private void buildDropCandidates() {
         dropCandidates.clear();
         for (Material m : Material.values()) {
-            if (!m.isBlock()) continue; // drops should be block items
-            if (m.isAir()) continue;
-            if (m == Material.WATER || m == Material.LAVA) continue;
-            String n = m.name();
-            // Exclude problematic creative-only meta blocks
-            if (n.equals("STRUCTURE_VOID") || n.equals("JIGSAW") || n.equals("LIGHT")) continue;
-            // Allow everything else (containers, redstone, waterloggable, etc.)
+            if (!isValidDropMaterial(m)) continue;
             dropCandidates.add(m);
         }
         dropList = new ArrayList<>(dropCandidates);
         if (dropList.isEmpty()) {
             dropList.add(Material.STONE);
         }
+    }
+
+    private boolean isValidDropMaterial(Material m) {
+        if (m == null) return false;
+        if (!m.isBlock()) return false; // only block items
+        if (m.isAir()) return false;
+        if (m == Material.WATER || m == Material.LAVA) return false;
+        String n = m.name();
+        // Exclude obviously invalid or ephemeral blocks that have no real item
+        if (n.equals("STRUCTURE_VOID") || n.equals("JIGSAW") || n.equals("LIGHT") ||
+            n.equals("PISTON_HEAD") || n.equals("MOVING_PISTON") ||
+            n.equals("NETHER_PORTAL") || n.equals("END_PORTAL") || n.equals("END_GATEWAY") ||
+            n.equals("FIRE") || n.equals("SOUL_FIRE") || n.equals("BUBBLE_COLUMN")) {
+            return false;
+        }
+        // Must be representable as an inventory item
+        try {
+            try {
+                // Modern API
+                if (!m.isItem()) return false;
+            } catch (NoSuchMethodError ignored) {
+                // Fallback: attempt to construct an ItemStack
+                org.bukkit.inventory.ItemStack test = new org.bukkit.inventory.ItemStack(m, 1);
+                if (test.getType() == Material.AIR) return false;
+            }
+        } catch (Throwable t) {
+            return false;
+        }
+        return true;
     }
 
     private Material pickDropReplacementNotSource(Material source) {
