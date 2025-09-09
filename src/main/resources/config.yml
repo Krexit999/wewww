@@ -56,11 +56,13 @@ palette:
 drops:
   allow-non-block-items: true      # if true, drops can include tools/armor/potions/valuables
   include-valuables: true          # include curated valuable items (elytra, totem, etc.)
+  regular-item-chance: 0.05        # 5% chance to roll from regular non-block items (tools/armor/potions/food)
+  valuable-item-chance: 0.01       # 1% chance to roll from rare valuables
   amount-min: 1                    # stack min (respects item max stack size)
   amount-max: 1                    # stack max
   enchant:
     enabled: true                  # allow crazy/unsafe enchants on any item (e.g., Knockback dirt)
-    chance: 0.35                   # chance per dropped item to receive enchants
+    chance: 0.01                   # 1% chance per dropped item to receive enchants
     count-min: 1                   # min number of enchants when applied
     count-max: 3                   # max number of enchants when applied
     level-min: 1                   # min enchant level
