@@ -52,6 +52,21 @@ palette:
   requeue-per-tick: 5     # how many loaded chunks to requeue per tick after rotation
   max-active-chunk-tasks: 8  # limit concurrent chunk workers to smooth CPU spikes
 
+# Randomized block-break drops (extends beyond blocks)
+drops:
+  allow-non-block-items: true      # if true, drops can include tools/armor/potions/valuables
+  include-valuables: true          # include curated valuable items (elytra, totem, etc.)
+  amount-min: 1                    # stack min (respects item max stack size)
+  amount-max: 1                    # stack max
+  enchant:
+    enabled: true                  # allow crazy/unsafe enchants on any item (e.g., Knockback dirt)
+    chance: 0.35                   # chance per dropped item to receive enchants
+    count-min: 1                   # min number of enchants when applied
+    count-max: 3                   # max number of enchants when applied
+    level-min: 1                   # min enchant level
+    level-max: 5                   # max enchant level
+    unsafe-on-any-item: true       # use unsafe enchants to allow on any material
+
 # Fun trolling features
 trolling:
   potion-randomize:
