@@ -20,6 +20,11 @@ import org.bukkit.entity.EntityType;
 import org.bukkit.WorldBorder;
 import org.bukkit.NamespacedKey;
 import org.bukkit.persistence.PersistentDataType;
+import org.bukkit.enchantments.Enchantment;
+import org.bukkit.inventory.meta.PotionMeta;
+import org.bukkit.potion.PotionData;
+import org.bukkit.potion.PotionType;
+import org.bukkit.inventory.meta.EnchantmentStorageMeta;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -116,6 +121,19 @@ public class BlockRandomizerReloaded extends JavaPlugin {
     private long statChunksQueued = 0L;
     private long statTasksCompleted = 0L;
     private int paletteEpoch = 0;
+
+    // Drops config
+    private boolean dropAllowNonBlockItems = true;
+    private boolean dropIncludeValuables = true;
+    private int dropAmountMin = 1;
+    private int dropAmountMax = 1;
+    private boolean dropEnchantEnabled = true;
+    private double dropEnchantChance = 0.35;
+    private int dropEnchantCountMin = 1;
+    private int dropEnchantCountMax = 3;
+    private int dropEnchantLevelMin = 1;
+    private int dropEnchantLevelMax = 5;
+    private boolean dropEnchantUnsafeOnAnyItem = true;
 
     @Override
     public void onEnable() {
@@ -226,6 +244,8 @@ public class BlockRandomizerReloaded extends JavaPlugin {
 
         // Read prank-related configuration
         readPrankConfig(cfg);
+        // Read drops-related configuration
+        readDropsConfig(cfg);
 
         // Protected source blocks (never modify original if matches)
         protectedSourceBlocks.clear();
@@ -499,6 +519,23 @@ public class BlockRandomizerReloaded extends JavaPlugin {
         if (hungerEnabled) {
             scheduleNextHungerJump();
         }
+    }
+
+    // -------------------- Drops configuration --------------------
+    private void readDropsConfig(FileConfiguration cfg) {
+        ConfigurationSection drops = cfg.getConfigurationSection("drops");
+        dropAllowNonBlockItems = drops == null || drops.getBoolean("allow-non-block-items", true);
+        dropIncludeValuables = drops == null || drops.getBoolean("include-valuables", true);
+        dropAmountMin = drops != null ? Math.max(1, drops.getInt("amount-min", 1)) : 1;
+        dropAmountMax = drops != null ? Math.max(dropAmountMin, drops.getInt("amount-max", 1)) : 1;
+        ConfigurationSection enchant = drops != null ? drops.getConfigurationSection("enchant") : null;
+        dropEnchantEnabled = enchant == null || enchant.getBoolean("enabled", true);
+        dropEnchantChance = enchant != null ? Math.max(0.0, Math.min(1.0, enchant.getDouble("chance", 0.35))) : 0.35;
+        dropEnchantCountMin = enchant != null ? Math.max(1, enchant.getInt("count-min", 1)) : 1;
+        dropEnchantCountMax = enchant != null ? Math.max(dropEnchantCountMin, enchant.getInt("count-max", 3)) : 3;
+        dropEnchantLevelMin = enchant != null ? Math.max(1, enchant.getInt("level-min", 1)) : 1;
+        dropEnchantLevelMax = enchant != null ? Math.max(dropEnchantLevelMin, enchant.getInt("level-max", 5)) : 5;
+        dropEnchantUnsafeOnAnyItem = enchant == null || enchant.getBoolean("unsafe-on-any-item", true);
     }
 
     private void scheduleNextFakeMessage() {
@@ -800,12 +837,51 @@ public class BlockRandomizerReloaded extends JavaPlugin {
 
     private final Set<Material> dropCandidates = EnumSet.noneOf(Material.class);
     private List<Material> dropList = new ArrayList<>();
+    // Curated important non-block items to include in drops when enabled
+    private static final Material[] IMPORTANT_DROP_ITEMS = new Material[] {
+            // Rares / progression
+            Material.ELYTRA, Material.TOTEM_OF_UNDYING, Material.NETHER_STAR,
+            Material.NETHERITE_INGOT, Material.ANCIENT_DEBRIS,
+            Material.ENCHANTED_GOLDEN_APPLE, Material.GOLDEN_APPLE,
+            Material.HEART_OF_THE_SEA, Material.BEACON, Material.SHULKER_BOX,
+            Material.DRAGON_HEAD, Material.DRAGON_EGG,
+            // Tools/Weapons/Armor (diamond + netherite)
+            Material.NETHERITE_SWORD, Material.NETHERITE_PICKAXE, Material.NETHERITE_AXE, Material.NETHERITE_SHOVEL,
+            Material.NETHERITE_HELMET, Material.NETHERITE_CHESTPLATE, Material.NETHERITE_LEGGINGS, Material.NETHERITE_BOOTS,
+            Material.DIAMOND_SWORD, Material.DIAMOND_PICKAXE, Material.DIAMOND_AXE, Material.DIAMOND_SHOVEL,
+            Material.DIAMOND_HELMET, Material.DIAMOND_CHESTPLATE, Material.DIAMOND_LEGGINGS, Material.DIAMOND_BOOTS,
+            Material.TRIDENT, Material.BOW, Material.CROSSBOW, Material.SHIELD,
+            // Utility
+            Material.ENDER_PEARL, Material.ENDER_EYE, Material.EXPERIENCE_BOTTLE, Material.TURTLE_HELMET,
+            Material.ENCHANTED_BOOK,
+            // Potions
+            Material.POTION, Material.SPLASH_POTION, Material.LINGERING_POTION
+    };
 
     private void buildDropCandidates() {
         dropCandidates.clear();
         for (Material m : Material.values()) {
             if (!isValidDropMaterial(m)) continue;
             dropCandidates.add(m);
+        }
+        // Add curated important non-block items if enabled
+        if (dropAllowNonBlockItems && dropIncludeValuables) {
+            for (Material it : IMPORTANT_DROP_ITEMS) {
+                if (it == null) continue;
+                // Don't include liquids or air for safety
+                if (it.isAir() || it == Material.WATER || it == Material.LAVA) continue;
+                try {
+                    // Ensure representable as an item
+                    boolean ok = true;
+                    try {
+                        if (!it.isItem()) ok = false;
+                    } catch (NoSuchMethodError ignored) {
+                        org.bukkit.inventory.ItemStack test = new org.bukkit.inventory.ItemStack(it, 1);
+                        if (test.getType() == Material.AIR) ok = false;
+                    }
+                    if (ok) dropCandidates.add(it);
+                } catch (Throwable ignored) {}
+            }
         }
         dropList = new ArrayList<>(dropCandidates);
         if (dropList.isEmpty()) {
@@ -815,7 +891,8 @@ public class BlockRandomizerReloaded extends JavaPlugin {
 
     private boolean isValidDropMaterial(Material m) {
         if (m == null) return false;
-        if (!m.isBlock()) return false; // only block items
+        // Always allow blocks; optionally allow curated non-block items elsewhere
+        if (!m.isBlock()) return false; // non-block items are added via IMPORTANT_DROP_ITEMS
         if (m.isAir()) return false;
         if (m == Material.WATER || m == Material.LAVA) return false;
         String n = m.name();
@@ -850,6 +927,105 @@ public class BlockRandomizerReloaded extends JavaPlugin {
         }
         if (pick == Material.WATER || pick == Material.LAVA) return Material.STONE;
         return pick;
+    }
+
+    // Build an ItemStack for the random drop (may include meta and crazy enchants)
+    public org.bukkit.inventory.ItemStack getRandomDropForSource(Material source) {
+        Material m = getDropPaletteReplacement(source);
+        if (m == null || m.isAir() || m == Material.WATER || m == Material.LAVA) return null;
+        org.bukkit.inventory.ItemStack base = buildBaseDropStack(m);
+        // Amount randomization (respect max stack size)
+        int amtMin = Math.max(1, dropAmountMin);
+        int amtMax = Math.max(amtMin, dropAmountMax);
+        int amount = amtMin == amtMax ? amtMin : (amtMin + rng.nextInt(Math.max(1, amtMax - amtMin + 1)));
+        amount = Math.max(1, Math.min(amount, base.getMaxStackSize()));
+        base.setAmount(amount);
+        // Optional crazy enchants
+        maybeApplyCrazyEnchant(base);
+        return base;
+    }
+
+    private org.bukkit.inventory.ItemStack buildBaseDropStack(Material m) {
+        // Special handling for potions and enchanted books; otherwise vanilla stack
+        try {
+            if (m == Material.POTION || m == Material.SPLASH_POTION || m == Material.LINGERING_POTION) {
+                return makeRandomPotion(m);
+            }
+            if (m == Material.ENCHANTED_BOOK) {
+                return makeRandomEnchantedBook();
+            }
+        } catch (Throwable ignored) {}
+        return new org.bukkit.inventory.ItemStack(m, 1);
+    }
+
+    private org.bukkit.inventory.ItemStack makeRandomPotion(Material potionMat) {
+        org.bukkit.inventory.ItemStack it = new org.bukkit.inventory.ItemStack(potionMat, 1);
+        try {
+            org.bukkit.inventory.meta.ItemMeta raw = it.getItemMeta();
+            if (raw instanceof org.bukkit.inventory.meta.PotionMeta) {
+                org.bukkit.inventory.meta.PotionMeta pm = (org.bukkit.inventory.meta.PotionMeta) raw;
+                PotionType[] types = PotionType.values();
+                // Avoid UNCRAFTABLE if present
+                PotionType pick = types[rng.nextInt(types.length)];
+                int guard = 0;
+                while (pick == PotionType.UNCRAFTABLE && guard++ < 10) {
+                    pick = types[rng.nextInt(types.length)];
+                }
+                boolean extended = rng.nextBoolean();
+                boolean upgraded = rng.nextBoolean();
+                // Some potion types can't be extended/upgraded; API will clamp
+                pm.setBasePotionData(new PotionData(pick, extended, upgraded));
+                it.setItemMeta(pm);
+            }
+        } catch (Throwable ignored) {}
+        return it;
+    }
+
+    private org.bukkit.inventory.ItemStack makeRandomEnchantedBook() {
+        org.bukkit.inventory.ItemStack it = new org.bukkit.inventory.ItemStack(Material.ENCHANTED_BOOK, 1);
+        try {
+            org.bukkit.inventory.meta.ItemMeta meta = it.getItemMeta();
+            if (meta instanceof EnchantmentStorageMeta) {
+                EnchantmentStorageMeta em = (EnchantmentStorageMeta) meta;
+                Enchantment[] all = Enchantment.values();
+                int count = 1 + rng.nextInt(2);
+                for (int i = 0; i < count; i++) {
+                    Enchantment e = all[rng.nextInt(all.length)];
+                    int lvl = 1 + rng.nextInt(4);
+                    try { em.addStoredEnchant(e, lvl, true); } catch (Throwable ignored) {}
+                }
+                it.setItemMeta(em);
+            }
+        } catch (Throwable ignored) {}
+        return it;
+    }
+
+    private void maybeApplyCrazyEnchant(org.bukkit.inventory.ItemStack it) {
+        if (!dropEnchantEnabled) return;
+        if (rng.nextDouble() >= dropEnchantChance) return;
+        try {
+            Enchantment[] pool = Enchantment.values();
+            int count = dropEnchantCountMin + rng.nextInt(Math.max(1, dropEnchantCountMax - dropEnchantCountMin + 1));
+            count = Math.max(1, count);
+            for (int i = 0; i < count; i++) {
+                Enchantment e = pool[rng.nextInt(pool.length)];
+                int lvl = dropEnchantLevelMin + rng.nextInt(Math.max(1, dropEnchantLevelMax - dropEnchantLevelMin + 1));
+                if (it.getType() == Material.ENCHANTED_BOOK) {
+                    org.bukkit.inventory.meta.ItemMeta meta = it.getItemMeta();
+                    if (meta instanceof EnchantmentStorageMeta) {
+                        EnchantmentStorageMeta em = (EnchantmentStorageMeta) meta;
+                        try { em.addStoredEnchant(e, lvl, true); } catch (Throwable ignored) {}
+                        it.setItemMeta(em);
+                    }
+                } else {
+                    if (dropEnchantUnsafeOnAnyItem) {
+                        it.addUnsafeEnchantment(e, lvl);
+                    } else {
+                        try { it.addEnchantment(e, lvl); } catch (IllegalArgumentException ignored) {}
+                    }
+                }
+            }
+        } catch (Throwable ignored) {}
     }
 
     private void buildProtectedSourceBlocks() {
