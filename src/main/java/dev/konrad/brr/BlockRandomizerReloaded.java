@@ -66,6 +66,7 @@ public class BlockRandomizerReloaded extends JavaPlugin {
     private BukkitTask requeueTask;
     private final ArrayDeque<Chunk> requeueQueue = new ArrayDeque<>();
     private int requeuePerTick = 5;
+    private int maxActiveChunkTasks = 8;
 
     // Prank config caches
     private List<Sound> prankSounds = new ArrayList<>();
@@ -297,11 +298,16 @@ public class BlockRandomizerReloaded extends JavaPlugin {
         // read knob (fallback to current value)
         int perTick = requeuePerTick;
         ConfigurationSection palSec = getConfig().getConfigurationSection("palette");
-        if (palSec != null) perTick = Math.max(1, palSec.getInt("requeue-per-tick", requeuePerTick));
+        if (palSec != null) {
+            perTick = Math.max(1, palSec.getInt("requeue-per-tick", requeuePerTick));
+            maxActiveChunkTasks = Math.max(1, palSec.getInt("max-active-chunk-tasks", maxActiveChunkTasks));
+        }
         requeuePerTick = perTick;
         requeueTask = Bukkit.getScheduler().runTaskTimer(this, () -> {
             int n = 0;
             while (n < requeuePerTick && !requeueQueue.isEmpty()) {
+                // Avoid too many concurrent chunk workers; smooths spikes
+                if (activeChunkTasks.size() >= maxActiveChunkTasks) break;
                 Chunk c = requeueQueue.pollFirst();
                 if (c != null) queueChunk(c);
                 n++;
@@ -1098,13 +1104,22 @@ public class BlockRandomizerReloaded extends JavaPlugin {
         String key = chunkKey(chunk);
         if (activeChunkTasks.containsKey(key)) return; // already processing
 
-        // Build queue of positions
+        // Build queue of positions (surface-optimized):
+        // For each (x,z) column, target only the top exposed block (and let
+        // applyChainAt handle underDepth expansion). This avoids iterating every Y.
         ArrayDeque<int[]> queue = new ArrayDeque<>();
+        World worldRef = chunk.getWorld();
+        int baseX = chunk.getX() << 4;
+        int baseZ = chunk.getZ() << 4;
         for (int x = 0; x < 16; x++) {
+            int worldX = baseX + x;
             for (int z = 0; z < 16; z++) {
-                for (int y = yFrom; y <= yTo; y++) {
-                    queue.add(new int[]{x, y, z});
-                }
+                int worldZ = baseZ + z;
+                int topY = worldRef.getHighestBlockYAt(worldX, worldZ);
+                // clamp to configured bounds
+                int y = Math.min(yTo, topY);
+                if (y < yFrom) continue;
+                queue.add(new int[]{x, y, z});
             }
         }
 
