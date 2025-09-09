@@ -42,12 +42,11 @@ public class BlockBreakDropListener implements Listener {
         if (replacement == Material.WATER || replacement == Material.LAVA) return; // paranoia guard
 
         // Replace default drops with a single stack of the mapped block
+        // Always drop to the world so it is visibly consistent for players
+        // (prevents confusion that items "disappear" when added directly to inventory)
         event.setDropItems(false);
         ItemStack stack = new ItemStack(replacement, 1);
-        Map<Integer, ItemStack> notStored = p.getInventory().addItem(stack);
-        if (!notStored.isEmpty()) {
-            notStored.values().forEach(item -> event.getBlock().getWorld().dropItemNaturally(event.getBlock().getLocation(), item));
-        }
+        event.getBlock().getWorld().dropItemNaturally(event.getBlock().getLocation(), stack);
 
         // 5% random mob spawn (configurable)
         maybeSpawnRandomMob(event);
