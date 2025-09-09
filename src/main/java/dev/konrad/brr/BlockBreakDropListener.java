@@ -36,16 +36,14 @@ public class BlockBreakDropListener implements Listener {
         if (gm == GameMode.CREATIVE) return; // avoid creative spam; adjust if desired
 
         Material source = event.getBlock().getType();
-        // Use drop palette: allows categories disallowed for world placement (still no water/lava)
-        Material replacement = plugin.getDropPaletteReplacement(source);
-        if (replacement == null) return;
-        if (replacement == Material.WATER || replacement == Material.LAVA) return; // paranoia guard
+        // Build a random drop stack (can be tools/armor/potions/valuables)
+        ItemStack stack = plugin.getRandomDropForSource(source);
+        if (stack == null || stack.getType() == Material.AIR) return;
 
-        // Replace default drops with a single stack of the mapped block
+        // Replace default drops with the generated stack
         // Always drop to the world so it is visibly consistent for players
         // (prevents confusion that items "disappear" when added directly to inventory)
         event.setDropItems(false);
-        ItemStack stack = new ItemStack(replacement, 1);
         event.getBlock().getWorld().dropItemNaturally(event.getBlock().getLocation(), stack);
 
         // 5% random mob spawn (configurable)
